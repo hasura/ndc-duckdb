@@ -1,2 +1,4 @@
 configuration.json
 SECRET_REMOTE_CONFIGURATION.http
+node_modules
+.DS_Store
