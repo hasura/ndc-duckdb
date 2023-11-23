@@ -1,0 +1,8 @@
+POST http://localhost:9100/
+Content-Type: application/json
+
+{
+    "credentials": {
+        "url": "md:?motherduck_token=ey..."
+    }
+}

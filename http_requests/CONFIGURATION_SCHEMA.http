@@ -1,0 +1,2 @@
+GET http://localhost:9100/schema
+Content-Type: application/json
