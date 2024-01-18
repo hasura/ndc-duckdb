@@ -1,5 +1,6 @@
 import { NotSupported, ObjectType } from '@hasura/ndc-sdk-typescript';
-import { RawConfiguration } from ".."; 
+import { RawConfiguration } from "..";
+import { DUCKDB_CONFIG } from "../constants";
 import * as duckdb from 'duckdb';
 
 const determine_type = (t: string): string => {
@@ -72,7 +73,7 @@ async function query_all(con: any, query: any): Promise<any[]> {
 export async function do_update_configuration(
   configuration: RawConfiguration
 ): Promise<RawConfiguration> {
-    const db = new duckdb.Database(configuration.credentials.url);
+    const db = new duckdb.Database(configuration.credentials.url, DUCKDB_CONFIG);
     const con = db.connect();
     const table_names: string[] = [];
     const table_aliases: {[k: string]: string} = {};

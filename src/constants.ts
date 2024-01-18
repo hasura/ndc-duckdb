@@ -611,3 +611,6 @@ export const RAW_CONFIGURATION_SCHEMA: JSONSchemaObject = {
   },
   "$schema": "http://json-schema.org/draft-07/schema#"
 };
+export const DUCKDB_CONFIG = {
+  'custom_user_agent': 'hasura'
+}
