@@ -12,7 +12,7 @@ import { Configuration } from "..";
 import * as duckdb from "duckdb";
 const SqlString = require("sqlstring-sqlite");
 import { format } from "sql-formatter";
-import { MAX_32_INT } from "../constants";
+import { DUCKDB_CONFIG, MAX_32_INT } from "../constants";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
@@ -383,7 +383,7 @@ async function perform_query(
   configuration: Configuration,
   query_plans: SQLQuery[]
 ): Promise<QueryResponse> {
-  const db = new duckdb.Database(configuration.credentials.url);
+  const db = new duckdb.Database(configuration.credentials.url, DUCKDB_CONFIG);
   const con = db.connect();
   const response: RowSet[] = [];
   for (let query_plan of query_plans) {
