@@ -15,7 +15,6 @@ export function do_get_schema(configuration: Configuration): SchemaResponse {
                 name: cn,
                 arguments: {},
                 type: cn,
-                deletable: false,
                 uniqueness_constraints: {},
                 foreign_keys: {}
             })

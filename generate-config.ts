@@ -4,9 +4,8 @@ import * as duckdb from 'duckdb';
 import * as fs from 'fs';
 import { promisify } from "util";
 const writeFile = promisify(fs.writeFile);
-const DEFAULT_URL = "md:?motherduck_token=ey...";
-const DEFAULT_OUTPUT_FILENAME = "configuration.json";
-const db = new duckdb.Database(DEFAULT_URL);
+const DUCKDB_URL = process.env["DUCKDB_URL"] as string;
+const db = new duckdb.Database(DUCKDB_URL);
 const con = db.connect();
 
 const determineType = (t: string): string => {
@@ -100,9 +99,6 @@ async function main() {
         }
     }
     const res: Configuration = {
-        credentials: {
-            url: DEFAULT_URL
-        },
         config: {
             collection_names: tableNames,
             collection_aliases: tableAliases,
@@ -111,7 +107,7 @@ async function main() {
             procedures: []
         }
     };
-    await writeFile(DEFAULT_OUTPUT_FILENAME, JSON.stringify(res));
+    await writeFile(`/etc/connector/config.json`, JSON.stringify(res));
 };
 
 main();

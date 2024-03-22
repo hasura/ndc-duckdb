@@ -1,0 +1,7 @@
+services:
+  connector:
+    develop:
+      watch:
+        - path: ./
+          target: /etc/connector
+          action: sync+restart

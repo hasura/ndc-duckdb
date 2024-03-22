@@ -1,8 +1,10 @@
 ## DuckDB (via MotherDuck) Connector
 
-The DuckDB Data Connector allows for connecting to a Motherduck hosted DuckDB database. This uses the [Typescript Data Connector SDK](https://github.com/hasura/ndc-sdk-typescript) and implements the [Data Connector Spec](https://github.com/hasura/ndc-spec). 
+## TODO: Fix README
 
-In order to use this connector you will need Motherduck setup. This connector currently only supports querying.
+The DuckDB Data Connector allows for connecting to a Motherduck hosted DuckDB database, or a local DuckDB database file. This uses the [Typescript Data Connector SDK](https://github.com/hasura/ndc-sdk-typescript) and implements the [Data Connector Spec](https://github.com/hasura/ndc-spec). 
+
+This connector currently only supports querying.
 
 ## Before you get started
 It is recommended that you:

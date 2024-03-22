@@ -11,16 +11,17 @@ import {
   ExplainResponse,
   start,
   Connector,
-  InternalServerError,
-  NotSupported,
+  Forbidden
 } from "@hasura/ndc-sdk-typescript";
-import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
-import { CAPABILITIES_RESPONSE, CONFIGURATION_SCHEMA, RAW_CONFIGURATION_SCHEMA } from "./constants";
-import { do_update_configuration } from "./handlers/updateConfiguration";
+import { CAPABILITIES_RESPONSE, DUCKDB_CONFIG } from "./constants";
 import { do_get_schema } from "./handlers/schema";
 import { do_explain } from "./handlers/explain";
 import { do_query } from "./handlers/query";
 import { do_mutation } from "./handlers/mutation";
+import { readFileSync } from "fs";
+import * as duckdb from "duckdb";
+
+const DUCKDB_URL = process.env["DUCKDB_URL"] as string;
 
 type ConfigurationSchema = {
   collection_names: string[];
@@ -35,15 +36,35 @@ type CredentialSchema = {
 };
 
 export type Configuration = {
-  credentials: CredentialSchema;
   config?: ConfigurationSchema;
 };
 
-export type RawConfiguration = Configuration;
+export interface State {
+    client: duckdb.Database
+};
 
-export interface State {}
+const connector: Connector<Configuration, State> = {
 
-const connector: Connector<RawConfiguration, Configuration, State> = {
+    /**
+     * Validate the configuration files provided by the user, returning a validated 'Configuration',
+     * or throwing an 'Error'. Throwing an error prevents Connector startup.
+     * @param configuration
+     */
+    parseConfiguration(configurationDir: string): Promise<Configuration> {
+        try {
+        const configLocation = `${configurationDir}/config.json`;
+        const fileContent = readFileSync(configLocation, 'utf8');
+        const configObject: Configuration = JSON.parse(fileContent);
+        return Promise.resolve(configObject);
+        } catch (error) {
+        console.error("Failed to parse configuration:", error);
+        throw new Forbidden(
+            "Internal Server Error, server configuration is invalid",
+            {}
+        );
+        }
+    },
+
     /**
      * Initialize the connector's in-memory state.
      *
@@ -55,8 +76,10 @@ const connector: Connector<RawConfiguration, Configuration, State> = {
      * @param configuration
      * @param metrics
      */
-    try_init_state(_: Configuration, __: unknown): Promise<State> {
-        return Promise.resolve({});
+    tryInitState(_: Configuration, __: unknown): Promise<State> {
+        const credentials: CredentialSchema = {url: DUCKDB_URL};
+        const client = new duckdb.Database(credentials.url, DUCKDB_CONFIG);
+        return Promise.resolve({client: client});
     },
 
     /**
@@ -66,51 +89,8 @@ const connector: Connector<RawConfiguration, Configuration, State> = {
      * from the NDC specification.
      * @param configuration
      */
-    get_capabilities(_: Configuration): CapabilitiesResponse {
+    getCapabilities(_: Configuration): CapabilitiesResponse {
         return CAPABILITIES_RESPONSE;
-    },
-
-    /**
-     * Return jsonschema for the configuration for this connector
-     */
-    get_configuration_schema(): JSONSchemaObject {
-        return CONFIGURATION_SCHEMA;
-        // return CONFIGURATION_SCHEMA;
-    },
-
-    get_raw_configuration_schema(): JSONSchemaObject {
-        return RAW_CONFIGURATION_SCHEMA;
-    },
-
-    make_empty_configuration(): RawConfiguration {
-        const conf: RawConfiguration = {
-            credentials: {
-                url: "",
-            },
-            config: {
-                collection_names: [],
-                collection_aliases: {},
-                object_types: {},
-                functions: [],
-                procedures: [],
-            },
-        };
-        return conf;
-    },
-
-    update_configuration(configuration: RawConfiguration): Promise<RawConfiguration> {
-        return do_update_configuration(configuration);
-    },
-
-    /**
-     * Validate the raw configuration provided by the user,
-     * returning a configuration error or a validated [`Connector::Configuration`].
-     * @param configuration
-     */
-    validate_raw_configuration(
-        configuration: RawConfiguration
-    ): Promise<Configuration> {
-        return Promise.resolve(configuration);
     },
 
     /**
@@ -120,9 +100,9 @@ const connector: Connector<RawConfiguration, Configuration, State> = {
      * from the NDC specification.
      * @param configuration
      */
-    async get_schema(configuration: Configuration): Promise<SchemaResponse> {
+    async getSchema(configuration: Configuration): Promise<SchemaResponse> {
         if (!configuration.config) {
-            throw new InternalServerError(
+            throw new Forbidden(
                 "Internal Server Error, server configuration is invalid",
                 {}
             );
@@ -139,18 +119,38 @@ const connector: Connector<RawConfiguration, Configuration, State> = {
      * @param state
      * @param request
      */
-    explain(
+    queryExplain(
         configuration: Configuration,
         _: State,
         request: QueryRequest
     ): Promise<ExplainResponse> {
         if (!configuration.config) {
-            throw new InternalServerError(
+            throw new Forbidden(
                 "Internal Server Error, server configuration is invalid",
                 {}
             );
         }
         return do_explain(configuration, request);
+    },
+
+    /**
+     * Explain a mutation by creating an execution plan
+     * @param configuration
+     * @param state
+     * @param request
+     */
+    mutationExplain(
+        configuration: Configuration,
+        _: State,
+        request: MutationRequest
+    ): Promise<ExplainResponse> {
+        if (!configuration.config) {
+        throw new Forbidden(
+            "Internal Server Error, server configuration is invalid",
+            {}
+        );
+        }
+        throw new Forbidden("Not implemented", {});
     },
 
     /**
@@ -164,16 +164,16 @@ const connector: Connector<RawConfiguration, Configuration, State> = {
      */
     query(
         configuration: Configuration,
-        _: State,
+        state: State,
         request: QueryRequest
     ): Promise<QueryResponse> {
         if (!configuration.config) {
-            throw new InternalServerError(
+            throw new Forbidden(
                 "Internal Server Error, server configuration is invalid",
                 {}
             );
         }
-        return do_query(configuration, request);
+        return do_query(configuration, state, request);
     },
 
     /**
@@ -201,7 +201,7 @@ const connector: Connector<RawConfiguration, Configuration, State> = {
      * @param configuration
      * @param state
      */
-    health_check(_: Configuration, __: State): Promise<undefined> {
+    healthCheck(_: Configuration, __: State): Promise<undefined> {
         return Promise.resolve(undefined);
     },
 
@@ -217,7 +217,7 @@ const connector: Connector<RawConfiguration, Configuration, State> = {
      * @param configuration
      * @param state
      */
-    fetch_metrics(_: Configuration, __: State): Promise<undefined> {
+    fetchMetrics(_: Configuration, __: State): Promise<undefined> {
         return Promise.resolve(undefined);
     },
 };
