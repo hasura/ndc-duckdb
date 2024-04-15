@@ -96,7 +96,7 @@ Navigate to the Console URL and you can issue a query. You can use the default D
 ```graphql
 query QueryHackerNews {
   duckdb_sampleDataHnHackerNews(
-    limit: 10
+    limit: 4
     where: {_or: [{text: {_like: "%Hasura%"}}, {text: {_like: "%DuckDB%"}}]}
   ) {
     text
