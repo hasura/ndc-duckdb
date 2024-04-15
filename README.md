@@ -1,112 +1,137 @@
-## DuckDB (via MotherDuck) Connector
+## DuckDB Connector
 
-## TODO: Fix README
-
-The DuckDB Data Connector allows for connecting to a Motherduck hosted DuckDB database, or a local DuckDB database file. This uses the [Typescript Data Connector SDK](https://github.com/hasura/ndc-sdk-typescript) and implements the [Data Connector Spec](https://github.com/hasura/ndc-spec). 
+The DuckDB Data Connector allows for connecting to a Motherduck hosted DuckDB database, or a local DuckDB database file. This connector uses the [Typescript Data Connector SDK](https://github.com/hasura/ndc-sdk-typescript) and implements the [Data Connector Spec](https://github.com/hasura/ndc-spec). 
 
 This connector currently only supports querying.
 
-## Before you get started
-It is recommended that you:
+### Setting up the DuckDB connector using Hasura Cloud & MotherDuck
 
-* Clone this repo and run npm install
-* Install the [Hasura3 CLI](https://github.com/hasura/v3-cli#hasura-v3-cli)
-* Log in via the CLI
-* Install the [connector plugin](https://hasura.io/docs/latest/hasura-cli/connector-plugin/)
-* Install [VSCode](https://code.visualstudio.com)
-* Install the [Hasura VSCode Extension](https://marketplace.visualstudio.com/items?itemName=HasuraHQ.hasura)
-* Setup [DuckDB with Motherduck](https://motherduck.com/)
+#### Step 1: Prerequisites
 
-## Deployment for Hasura Users
-To deploy a connector and use it in a Hasura V3 project, follow these steps:
+1. Install the [new Hasura CLI](https://hasura.io/docs/3.0/cli/installation/) — to quickly and easily create and manage your Hasura projects and builds.
+2. Install the [Hasura VS Code extension](https://marketplace.visualstudio.com/items?itemName=HasuraHQ.hasura) — with support for other editors coming soon!
+3. Have a [MotherDuck](https://motherduck.com/) hosted DuckDB database — for supplying data to your API.
 
-1. Create a Hasura V3 project (or use an existing project)
+#### Step 2: Login to Hasura
 
-2. Generate a configuration file for your Motherduck hosted DuckDB Database.
-    Start the configuration server by running `npm run start-server` and then send a request with your database credentials.
-    You can see example http requests in the http_requests folder. You may need to edit your credentials here. You'll want to place the output in a JSON file named config.json
-    * You'll want to run REMOTE_CONFIGURATION.http and provide the motherduck token
-3. Once you have a configuration file, you can deploy the connector onto Hasura Cloud
+After our prerequisites are taken care of, login to Hasura Cloud with the CLI:
 
-Ensure you are logged in to Hasura CLI
+`ddn login`
 
-```hasura3 cloud login --pat 'YOUR-HASURA-TOKEN'```
+This will open up a browser window and initiate an OAuth2 login flow. If the browser window doesn't open automatically, use the link shown in the terminal output to launch the flow.
 
-From there, you can deploy the connector:
+#### Step 3: Create a new project
 
-```hasura3 connector create duckdb:v1 --github-repo-url https://github.com/hasura/ndc-duckdb/tree/main --config-file ./config.json```
+We'll use the `create project` command to create a new project:
 
+`ddn create project --dir ./ddn`
 
-## Usage
+#### Step 4: Add a connector manifest
 
-Once your connector is deployed, you can get the URL of the connector using:
-```hasura3 connector list```
+Let's move into the project directory:
 
-```
-my-cool-connector:v1 https://connector-9XXX7-hyc5v23h6a-ue.a.run.app active
-```
+`cd ddn`
 
-In order to use the connector once deployed you will first want to reference the connector in your project metadata:
+Create a subgraph:
+
+`ddn create subgraph duckdb`
+
+Then, create a connector manifest:
+`ddn add connector-manifest duckdb_connector --subgraph duckdb --hub-connector hasura/duckdb --type cloud`
+
+#### Step 5: Edit the connector manifest
+
+You should have a connector manifest created at `ddn/duckdb/duckdb_connector/connector/duckdb_connector.build.hml`
 
 ```yaml
-kind: "AuthConfig"
-allowRoleEmulationFor: "admin"
-webhook:
-  mode: "POST"
-  webhookUrl: "https://auth.pro.hasura.io/webhook/ddn?role=admin"
----
-kind: DataConnector
+kind: ConnectorManifest
 version: v1
+spec:
+  supergraphManifests:
+    - base
 definition:
-  name: my_connector
-  url:
-    singleUrl: 'https://connector-9XXX7-hyc5v23h6a-ue.a.run.app'
+  name: duckdb_connector
+  type: cloud
+  connector:
+    type: hub
+    name: hasura/duckdb:v0.0.9
+  deployments:
+    - context: .
+      env:
+        DUCKDB_URL:
+          value: ""
 ```
 
-If you have the [Hasura VSCode Extension](https://marketplace.visualstudio.com/items?itemName=HasuraHQ.hasura) installed
-you can run the following code actions:
+Fill in the value for the DUCKDB_URL environment variable with a DuckDB connection string which looks something like this:
 
-* `Hasura: Refresh data source`
-* `Hasura: Track all collections / functions ...`
+`md:?motherduck_token=ey`
 
-This will integrate your connector into your Hasura project which can then be deployed or updated using the Hasura3 CLI:
+(Make sure to save your changes to the file!)
+
+#### Step 6: Start a development session
+
+Start a Hasura dev session using the following command:
+
+`ddn dev`
+
+You should see something like this: 
 
 ```
-hasura3 cloud build create --project-id my-project-id --metadata-file metadata.hml
+12:10PM INF Building SupergraphManifest "base"...
++---------------+--------------------------------------------------------------------------------------------------+
+| Build Version | 7e01762194                                                                                       |
++---------------+--------------------------------------------------------------------------------------------------+
+| API URL       | https://pure-sparrow-2887-7e01762194.ddn.hasura.app/graphql                                      |
++---------------+--------------------------------------------------------------------------------------------------+
+| Console URL   | https://console.hasura.io/project/pure-sparrow-2887/environment/default/build/7e01762194/graphql |
++---------------+--------------------------------------------------------------------------------------------------+
+| Project Name  | pure-sparrow-2887                                                                                |
++---------------+--------------------------------------------------------------------------------------------------+
+| Description   | Dev build - Mon, 15 Apr 2024 12:10:17 CDT                                                        |
++---------------+--------------------------------------------------------------------------------------------------+
 ```
 
-## Service Authentication
+Navigate to the Console URL and you can issue a query. You can use the default DuckDB example tables to issue this query for example:
 
-If you don't wish to have your connector publically accessible then you must set a service token by specifying the  `SERVICE_TOKEN_SECRET` environment variable when creating your connector:
-
-* `--env SERVICE_TOKEN_SECRET=SUPER_SECRET_TOKEN_XXX123`
-
-Your Hasura project metadata must then set a matching bearer token:
-
-```yaml
-kind: DataConnector
-version: v1
-definition:
-  name: my_connector
-  url:
-    singleUrl: 'https://connector-9XXX7-hyc5v23h6a-ue.a.run.app'
-  headers:
-    Authorization:
-      value: "Bearer SUPER_SECRET_TOKEN_XXX123"
+```graphql
+query QueryHackerNews {
+  duckdb_sampleDataHnHackerNews(
+    limit: 10
+    where: {_or: [{text: {_like: "%Hasura%"}}, {text: {_like: "%DuckDB%"}}]}
+  ) {
+    text
+    id
+  }
+}
 ```
 
-While you can specify the token inline as above, it is recommended to use the Hasura secrets functionality for this purpose:
+And get the response:
 
-```yaml
-kind: DataConnector
-version: v1
-definition:
-  name: my_connector
-  url:
-    singleUrl: 'https://connector-9XXX7-hyc5v23h6a-ue.a.run.app'
-  headers:
-    Authorization:
-      valueFromSecret: BEARER_TOKEN_SECRET
+```
+{
+  "data": {
+    "duckdb_sampleDataHnHackerNews": [
+      {
+        "text": "Experimental Product? Hasura + React<p>Product with market fit and scale needs? Elixir&#x2F;Phoenix",
+        "id": 31480758
+      },
+      {
+        "text": "I just skimmed through the article tbh, but I saw 14 GB and what looked like a predicate pushdown optimization. I think DuckDB could handle that on my 16GB mac.",
+        "id": 32182618
+      },
+      {
+        "text": "To what extent does this headache go away if autogenerating graphql from a relational db, using tools like Postgraphile or Hasura? I never considered making my &quot;own&quot; graphql service but those tools sure make it look easy to create a nice API controller through db migrations.",
+        "id": 31285405
+      },
+      {
+        "text": "Under what circumtances should I prefer to use DuckDB over SQLite or PostgreSQL? It is not clear.",
+        "id": 33285150
+      }
+    ]
+  }
+}
 ```
 
-NOTE: This secret should contain the `Bearer ` prefix.
+### Setting up the DuckDB connector locally (Coming Soon)
+
+Please keep an eye out for instructions on running things locally which will be coming soon. 
