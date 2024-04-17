@@ -5,8 +5,11 @@ import * as fs from 'fs';
 import { promisify } from "util";
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
+let HASURA_CONFIGURATION_DIRECTORY = process.env["HASURA_CONFIGURATION_DIRECTORY"] as string | undefined;
+if (HASURA_CONFIGURATION_DIRECTORY === undefined || HASURA_CONFIGURATION_DIRECTORY.length === 0){
+    HASURA_CONFIGURATION_DIRECTORY = ".";
+}
 const DUCKDB_URL = process.env["DUCKDB_URL"] as string;
-const HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH = process.env["HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH"] as string | undefined;
 const db = new duckdb.Database(DUCKDB_URL);
 const con = db.connect();
 
@@ -110,10 +113,7 @@ async function main() {
         }
     };
     const jsonString = JSON.stringify(res, null, 4);
-    let filePath = `${HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH}/config.json`;
-    if (HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH === undefined || HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH.length === 0){
-        filePath = "config.json";
-    }
+    let filePath = `${HASURA_CONFIGURATION_DIRECTORY}/config.json`;
     try {
         const existingData = await readFile(filePath, 'utf8');
         if (existingData !== jsonString) {

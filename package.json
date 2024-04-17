@@ -1,11 +1,11 @@
 {
   "name": "duckdb-sdk",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "DUCKDB_URL=md:?motherduck_token=ey ts-node ./src/index.ts serve --configuration=",
-    "generate-config": "DUCKDB_URL=md:?motherduck_token=ey ts-node generate-config"
+    "start": "ts-node ./src/index.ts serve --configuration=",
+    "generate-config": "ts-node generate-config"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",
