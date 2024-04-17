@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node ./src/index.ts serve --configuration=",
+    "start": "ts-node ./src/index.ts serve --configuration=.",
     "generate-config": "ts-node generate-config"
   },
   "devDependencies": {
