@@ -1,11 +1,15 @@
 packagingDefinition:
   type: PrebuiltDockerImage
-  dockerImage: ghcr.io/hasura/ndc-duckdb:v0.0.9
+  dockerImage: ghcr.io/hasura/ndc-duckdb:v0.0.10
 supportedEnvironmentVariables:
   - name: DUCKDB_URL
     description: The url for the DuckDB database
 commands:
-  update: docker run --rm -e DUCKDB_URL="$DUCKDB_URL" -v "$HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH":/etc/connector ghcr.io/hasura/ndc-duckdb:v0.0.9 update
+  update:
+    type: Dockerized
+    dockerImage: ghcr.io/hasura/ndc-duckdb:v0.0.10
+    commandArgs:
+      - update
 dockerComposeWatch:
   - path: ./
     target: /etc/connector

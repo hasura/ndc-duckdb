@@ -51,9 +51,12 @@ const connector: Connector<Configuration, State> = {
      * @param configuration
      */
     parseConfiguration(configurationDir: string): Promise<Configuration> {
+        let filePath = `${configurationDir}/config.json`;
+        if (configurationDir.length === 0){
+            filePath = "config.json";
+        }
         try {
-        const configLocation = `${configurationDir}/config.json`;
-        const fileContent = readFileSync(configLocation, 'utf8');
+        const fileContent = readFileSync(filePath, 'utf8');
         const configObject: Configuration = JSON.parse(fileContent);
         return Promise.resolve(configObject);
         } catch (error) {

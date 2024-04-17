@@ -4,7 +4,9 @@ import * as duckdb from 'duckdb';
 import * as fs from 'fs';
 import { promisify } from "util";
 const writeFile = promisify(fs.writeFile);
+const readFile = promisify(fs.readFile);
 const DUCKDB_URL = process.env["DUCKDB_URL"] as string;
+const HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH = process.env["HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH"] as string | undefined;
 const db = new duckdb.Database(DUCKDB_URL);
 const con = db.connect();
 
@@ -107,7 +109,23 @@ async function main() {
             procedures: []
         }
     };
-    await writeFile(`/etc/connector/config.json`, JSON.stringify(res));
+    const jsonString = JSON.stringify(res, null, 4);
+    let filePath = `${HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH}/config.json`;
+    if (HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH === undefined || HASURA_PLUGIN_CONNECTOR_CONTEXT_PATH.length === 0){
+        filePath = "config.json";
+    }
+    try {
+        const existingData = await readFile(filePath, 'utf8');
+        if (existingData !== jsonString) {
+            await writeFile(filePath, jsonString);
+            console.log('File updated.');
+        } else {
+            console.log('No changes detected. File not updated.');
+        }
+    } catch (error) {
+        await writeFile(filePath, jsonString);
+        console.log('New file written.');
+    }
 };
 
 main();

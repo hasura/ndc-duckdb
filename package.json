@@ -1,14 +1,11 @@
 {
   "name": "duckdb-sdk",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node ./src/index.ts serve --configuration=configuration.json",
-    "start-server": "ts-node ./src/index.ts configuration serve",
-    "test": "jest",
-    "generate-config": "ts-node generate-config",
-    "import-data": "ts-node import-data"
+    "start": "DUCKDB_URL=md:?motherduck_token=ey ts-node ./src/index.ts serve --configuration=",
+    "generate-config": "DUCKDB_URL=md:?motherduck_token=ey ts-node generate-config"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",
@@ -16,7 +13,7 @@
     "typescript-json-schema": "^0.62.0"
   },
   "dependencies": {
-    "@hasura/ndc-sdk-typescript": "^4.2.1",
+    "@hasura/ndc-sdk-typescript": "^4.5.0",
     "duckdb": "^0.9.2",
     "sql-formatter": "^13.0.4",
     "sqlstring-sqlite": "^0.1.1"
