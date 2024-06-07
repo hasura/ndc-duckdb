@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.0.15] - 2024-05-6
+* Remove linux/arm/v7 from platforms
+
 ## [0.0.14] - 2024-05-6
 * Add QEMU to Docker workflow
 
