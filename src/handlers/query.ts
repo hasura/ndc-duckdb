@@ -328,7 +328,7 @@ function build_query(
               currentAlias = nextAlias;
             }
             order_elems.push(
-              `LOWER(${escape_double(currentAlias)}.${escape_double(elem.target.name)}) ${elem.order_direction}`
+              `${escape_double(currentAlias)}.${escape_double(elem.target.name)} ${elem.order_direction}`
             );
           }
           break;

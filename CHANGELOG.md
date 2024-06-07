@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.0.16] - 2024-05-6
+* Change orderBy to use default casing. (Ordering is case-sensitive and uses underlying implementation which differs from Postgres)
+
 ## [0.0.15] - 2024-05-6
 * Remove linux/arm/v7 from platforms
 
