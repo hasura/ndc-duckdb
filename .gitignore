@@ -3,3 +3,6 @@ SECRET_REMOTE_CONFIGURATION.http
 node_modules
 .DS_Store
 config.json
+TMP.md
+chinook.db
+chinook.db.wal

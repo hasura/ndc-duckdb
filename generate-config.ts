@@ -59,6 +59,8 @@ const determineType = (t: string): string => {
             return "String";
         case "VARCHAR":
             return "String";
+        case "HUGEINT":
+            return "String";
         default:
             if (t.startsWith("DECIMAL")){
                 return "Float";

@@ -1,13 +1,13 @@
 packagingDefinition:
   type: PrebuiltDockerImage
-  dockerImage: ghcr.io/hasura/ndc-duckdb:v0.0.11
+  dockerImage: ghcr.io/hasura/ndc-duckdb:v0.0.12
 supportedEnvironmentVariables:
   - name: DUCKDB_URL
     description: The url for the DuckDB database
 commands:
   update:
     type: Dockerized
-    dockerImage: ghcr.io/hasura/ndc-duckdb:v0.0.11
+    dockerImage: ghcr.io/hasura/ndc-duckdb:v0.0.12
     commandArgs:
       - update
 dockerComposeWatch:

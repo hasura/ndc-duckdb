@@ -1,6 +1,12 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.0.12] - 2024-05-6
+* Add Relationships support
+* Fix OrderBy across relationships
+* Add Filtering on Relationships
+* Ship a multi-arch build
+
 ## [0.0.11] - 2024-04-17
 * Update generate-config to use the proper configuration directory
 

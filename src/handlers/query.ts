@@ -5,12 +5,13 @@ import {
   Query,
   RowSet,
   Forbidden,
-  Conflict
+  Conflict,
+  Relationship
 } from "@hasura/ndc-sdk-typescript";
 import { Configuration, State } from "..";
 const SqlString = require("sqlstring-sqlite");
-// import { format } from "sql-formatter";
 import { MAX_32_INT } from "../constants";
+// import { format } from "sql-formatter";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
@@ -53,6 +54,20 @@ const json_replacer = (key: string, value: any): any => {
   return value;
 };
 
+const formatSQLWithArgs = (sql: string, args: any[]): string => {
+  let index = 0;
+  return sql.replace(/\?/g, () => {
+    const arg = args[index++];
+    if (typeof arg === 'string') {
+      return `'${arg}'`;
+    } else if (arg === null) {
+      return 'NULL';
+    } else {
+      return arg;
+    }
+  });
+};
+
 function wrap_data(s: string): string {
   return `
   SELECT
@@ -65,7 +80,7 @@ function wrap_data(s: string): string {
 function wrap_rows(s: string): string {
   return `
   SELECT
-    JSON_OBJECT('rows', JSON_GROUP_ARRAY(JSON(r)))
+    JSON_OBJECT('rows', COALESCE(JSON_GROUP_ARRAY(JSON(r)), JSON('[]')))
   FROM
     (
       ${s}
@@ -75,8 +90,13 @@ function wrap_rows(s: string): string {
 
 function build_where(
   expression: Expression,
+  collection_relationships: {
+    [k: string]: Relationship;
+  },
   args: any[],
-  variables: QueryVariables
+  variables: QueryVariables,
+  prefix: string,
+  collection_aliases: {[k: string]: string}
 ): string {
   let sql = "";
   switch (expression.type) {
@@ -111,9 +131,6 @@ function build_where(
           sql = `${expression.column.name} = ?`;
           break;
         case "_like":
-          // TODO: Should this be setup like this? Or is this wrong because the % wildcard matches should be set by user?
-          // I.e. Should we let the user pass through their own % to more closely follow the sqlite spec, and create a new operator..
-          // _contains => That does the LIKE %match%
           args[args.length - 1] = `%${args[args.length - 1]}%`;
           sql = `${expression.column.name} LIKE ?`;
           break;
@@ -148,7 +165,7 @@ function build_where(
       } else {
         const clauses = [];
         for (const expr of expression.expressions) {
-          const res = build_where(expr, args, variables);
+          const res = build_where(expr, collection_relationships, args, variables, prefix, collection_aliases);
           clauses.push(res);
         }
         sql = `(${clauses.join(` AND `)})`;
@@ -160,22 +177,38 @@ function build_where(
       } else {
         const clauses = [];
         for (const expr of expression.expressions) {
-          const res = build_where(expr, args, variables);
+          const res = build_where(expr, collection_relationships, args, variables, prefix, collection_aliases);
           clauses.push(res);
         }
         sql = `(${clauses.join(` OR `)})`;
       }
       break;
     case "not":
-      const not_result = build_where(expression.expression, args, variables);
+      const not_result = build_where(expression.expression, collection_relationships, args, variables, prefix, collection_aliases);
       sql = `NOT (${not_result})`;
       break;
-    // case "binary_array_comparison_operator":
-    //   // IN
-    //   throw new BadRequest("In not implemented", {});
     case "exists":
-      // EXISTS
-      throw new Forbidden("Not implemented", {});
+      const { in_collection, predicate } = expression;
+      let subquery_sql = "";
+      let subquery_alias = `${prefix}_exists`;
+
+      if (in_collection.type === "related") {
+        const relationship = collection_relationships[in_collection.relationship];
+        let from_collection_alias = collection_aliases[relationship.target_collection];
+        subquery_sql = `
+          SELECT 1
+          FROM ${from_collection_alias} AS ${escape_double(subquery_alias)}
+          WHERE ${predicate ? build_where(predicate, collection_relationships, args, variables, prefix, collection_aliases) : '1 = 1'}
+          AND ${Object.entries(relationship.column_mapping).map(([from, to]) => {
+            return `${escape_double(prefix)}.${escape_double(from)} = ${escape_double(subquery_alias)}.${escape_double(to)}`;
+          }).join(" AND ")}
+        `;
+      } else if (in_collection.type === "unrelated") {
+        throw new Forbidden("Unrelated collection type not supported!", {});
+      }
+
+      sql = `EXISTS (${subquery_sql})`;
+      break;
     default:
       throw new Forbidden("Unknown Expression Type!", {});
   }
@@ -190,9 +223,14 @@ function build_query(
   path: string[],
   variables: QueryVariables,
   args: any[],
-  agg_args: any[]
+  agg_args: any[],
+  relationship_key: string | null,
+  collection_relationships: {
+    [k: string]: Relationship;
+  },
+  collection_aliases: {[k: string]: string}
 ): SQLQuery {
-  if (config.config === null || config.config === undefined) {
+  if (!config.config) {
     throw new Forbidden("Must supply config", {});
   }
   let sql = "";
@@ -201,7 +239,6 @@ function build_query(
   let run_agg = false;
   path.push(collection);
   let collection_alias = path.join("_");
-  // let indent = "    ".repeat(path.length - 1);
 
   let limit_sql = ``;
   let offset_sql = ``;
@@ -209,8 +246,6 @@ function build_query(
   let collect_rows = [];
   let where_conditions = ["WHERE 1"];
   if (query.aggregates) {
-    // TODO: Add each aggregate to collectRows
-    // Aggregates need to be handled seperately.
     run_agg = true;
     agg_sql = "... todo";
     throw new Forbidden("Aggregates not implemented yet!", {});
@@ -221,24 +256,31 @@ function build_query(
       collect_rows.push(escape_single(field_name));
       switch (field_value.type) {
         case "column":
-          collect_rows.push(escape_double(field_value.column));
+          collect_rows.push(`${escape_double(collection_alias)}.${escape_double(field_value.column)}`);
           break;
         case "relationship":
+          let relationship_collection = query_request.collection_relationships[field_value.relationship].target_collection;
+          let relationship_collection_alias = config.config.collection_aliases[relationship_collection];
           collect_rows.push(
-            `(${
-              build_query(
-                config,
-                query_request,
-                config.config.collection_aliases[field_value.relationship], // Lookup alias
-                field_value.query,
-                path,
-                variables,
-                args,
-                agg_args
-              ).sql
-            })`
+            `COALESCE((
+              ${
+                build_query(
+                  config,
+                  query_request,
+                  relationship_collection_alias,
+                  field_value.query,
+                  path,
+                  variables,
+                  args,
+                  agg_args,
+                  field_value.relationship,
+                  collection_relationships,
+                  collection_aliases
+                ).sql
+              }), JSON('[]')
+            )`
           );
-          path.pop(); // POST-ORDER search stack pop!
+          path.pop();
           break;
         default:
           throw new Conflict("The types tricked me. 😭", {});
@@ -246,22 +288,49 @@ function build_query(
     }
   }
   let from_sql = `${collection} as ${escape_double(collection_alias)}`;
-  if (path.length > 1) {
-    throw new Forbidden("Relationships are not supported yet.", {});
+  if (path.length > 1 && relationship_key !== null) {
+    let relationship = query_request.collection_relationships[relationship_key];
+    let parent_alias = path.slice(0, -1).join("_");
+    let relationship_alias = config.config.collection_aliases[relationship.target_collection];
+    from_sql = `${relationship_alias} as ${escape_double(collection_alias)}`;
+    where_conditions.push(
+      ...Object.entries(relationship.column_mapping).map(([from, to]) => {
+        return `${escape_double(parent_alias)}.${escape_double(from)} = ${escape_double(collection_alias)}.${escape_double(to)}`;
+      })
+    );
   }
+
+  const filter_joins: string[] = [];
 
   if (query.predicate) {
-    where_conditions.push(`(${build_where(query.predicate, args, variables)})`);
+    where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, args, variables, collection_alias, config.config.collection_aliases)})`);
   }
 
-  if (query.order_by) {
+  if (query.order_by && config.config) {
     let order_elems: string[] = [];
     for (let elem of query.order_by.elements) {
       switch (elem.target.type) {
         case "column":
-          order_elems.push(
-            `${escape_double(elem.target.name)} ${elem.order_direction}`
-          );
+          if (elem.target.path.length === 0){
+            order_elems.push(
+              `${escape_double(collection_alias)}.${escape_double(elem.target.name)} ${elem.order_direction}`
+            );
+          } else {
+            let currentAlias = collection_alias;
+            for (let path_elem of elem.target.path) {
+              const relationship = collection_relationships[path_elem.relationship];
+              const nextAlias = `${currentAlias}_${relationship.target_collection}`;
+              const target_collection_alias = collection_aliases[relationship.target_collection];
+              const join_str = `JOIN ${target_collection_alias} AS ${escape_double(nextAlias)} ON ${Object.entries(relationship.column_mapping).map(([from, to]) => `${escape_double(currentAlias)}.${escape_double(from)} = ${escape_double(nextAlias)}.${escape_double(to)}`).join(" AND ")}`;
+              if (!filter_joins.includes(join_str)) {
+                filter_joins.push(join_str);
+              }
+              currentAlias = nextAlias;
+            }
+            order_elems.push(
+              `LOWER(${escape_double(currentAlias)}.${escape_double(elem.target.name)}) ${elem.order_direction}`
+            );
+          }
           break;
         case "single_column_aggregate":
           throw new Forbidden(
@@ -294,18 +363,19 @@ function build_query(
   }
 
   sql = wrap_rows(`
-  SELECT
-  JSON_OBJECT(${collect_rows.join(",")}) as r
-  FROM ${from_sql}
-  ${where_conditions.join(" AND ")}
-  ${order_by_sql}
-  ${limit_sql}
-  ${offset_sql}
-  `);
+SELECT
+JSON_OBJECT(${collect_rows.join(",")}) as r
+FROM ${from_sql}
+${filter_joins.join(" ")}
+${where_conditions.join(" AND ")}
+${order_by_sql}
+${limit_sql}
+${offset_sql}
+`);
 
   if (path.length === 1) {
     sql = wrap_data(sql);
-    // console.log(format(sql, { language: "sqlite" }));
+    // console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
   }
 
   return {
@@ -331,6 +401,7 @@ export async function plan_queries(
   if (query.variables) {
     let promises = query.variables.map((varSet) => {
       let query_variables: QueryVariables = varSet;
+      if (configuration.config){
       return build_query(
         configuration,
         query,
@@ -339,8 +410,14 @@ export async function plan_queries(
         [],
         query_variables,
         [],
-        []
+        [],
+        null,
+        query.collection_relationships,
+        configuration.config.collection_aliases
       );
+      } else {
+        throw new Forbidden("Config must be defined", {});
+      }
     });
     query_plan = await Promise.all(promises);
   } else {
@@ -352,7 +429,10 @@ export async function plan_queries(
       [],
       {},
       [],
-      []
+      [],
+      null,
+      query.collection_relationships,
+      configuration.config.collection_aliases
     );
     query_plan = [promise];
   }
@@ -390,7 +470,6 @@ export async function do_query(
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
-  // console.log(JSON.stringify(query, null, 4));
   let query_plans = await plan_queries(configuration, query);
   return await perform_query(state, query_plans);
 }
