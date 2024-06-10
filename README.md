@@ -1,137 +1,177 @@
-## DuckDB Connector
+# Hasura DuckDB Connector
+<a href="https://hasura.io/"><img src="./docs/logo.svg" align="right" width="200"></a>
 
-The DuckDB Data Connector allows for connecting to a Motherduck hosted DuckDB database, or a local DuckDB database file. This connector uses the [Typescript Data Connector SDK](https://github.com/hasura/ndc-sdk-typescript) and implements the [Data Connector Spec](https://github.com/hasura/ndc-spec). 
+[![Docs](https://img.shields.io/badge/docs-v3.x-brightgreen.svg?style=flat)](https://hasura.io/connectors/duckdb)
+[![ndc-hub](https://img.shields.io/badge/ndc--hub-duckdb-blue.svg?style=flat)](https://hasura.io/connectors/duckdb)
+[![License](https://img.shields.io/badge/license-Apache--2.0-purple.svg?style=flat)](./LICENSE.txt)
+[![Status](https://img.shields.io/badge/status-alpha-yellow.svg?style=flat)](./README.md)
 
-This connector currently only supports querying.
+The Hasura DuckDB Connector allows for connecting to a DuckDB database or a MotherDuck hosted DuckDB database to give you an instant GraphQL API on top of your DuckDB data.
 
-### Setting up the DuckDB connector using Hasura Cloud & MotherDuck
+This connector is built using the [Typescript Data Connector SDK](https://github.com/hasura/ndc-sdk-typescript) and implements the [Data Connector Spec](https://github.com/hasura/ndc-spec).
 
-#### Step 1: Prerequisites
+* [Connector information in the Hasura Hub](https://hasura.io/connectors/duckdb)
+* [Hasura V3 Documentation](https://hasura.io/docs/3.0/index/)
 
-1. Install the [new Hasura CLI](https://hasura.io/docs/3.0/cli/installation/) — to quickly and easily create and manage your Hasura projects and builds.
-2. Install the [Hasura VS Code extension](https://marketplace.visualstudio.com/items?itemName=HasuraHQ.hasura) — with support for other editors coming soon!
-3. Have a [MotherDuck](https://motherduck.com/) hosted DuckDB database — for supplying data to your API.
+## Features
 
-#### Step 2: Login to Hasura
+Below, you'll find a matrix of all supported features for the DuckDB connector:
 
-After our prerequisites are taken care of, login to Hasura Cloud with the CLI:
+| Feature                         | Supported | Notes |
+| ------------------------------- | --------- | ----- |
+| Native Queries + Logical Models | ❌     |       |
+| Simple Object Query             | ✅     |       |
+| Filter / Search                 | ✅     |       |
+| Simple Aggregation              | ❌     |       |
+| Sort                            | ✅     |       |
+| Paginate                        | ✅     |       |
+| Table Relationships             | ✅     |       |
+| Views                           | ❌     |       |
+| Distinct                        | ❌     |       |
+| Remote Relationships            | ✅     |       |
+| Custom Fields                   | ❌     |       |
+| Mutations                       | ❌     |       |
 
-`ddn login`
+## Before you get Started
 
-This will open up a browser window and initiate an OAuth2 login flow. If the browser window doesn't open automatically, use the link shown in the terminal output to launch the flow.
+[Prerequisites or recommended steps before using the connector.]
 
-#### Step 3: Create a new project
+1. The [DDN CLI](https://hasura.io/docs/3.0/cli/installation) and [Docker](https://docs.docker.com/engine/install/) installed
+2. A [supergraph](https://hasura.io/docs/3.0/getting-started/init-supergraph)
+3. A [subgraph](https://hasura.io/docs/3.0/getting-started/init-subgraph)
+4. Have a [MotherDuck](https://motherduck.com/) hosted DuckDB database, or a persitent DuckDB database file — for supplying data to your API.
 
-We'll use the `create project` command to create a new project:
+The steps below explain how to Initialize and configure a connector for local development. You can learn how to deploy a
+connector — after it's been configured — [here](https://hasura.io/docs/3.0/getting-started/deployment/deploy-a-connector).
 
-`ddn create project --dir ./ddn`
+## Using the DuckDB connector
 
-#### Step 4: Add a connector manifest
+### Step 1: Authenticate your CLI session
 
-Let's move into the project directory:
+```bash
+ddn auth login
+```
 
-`cd ddn`
+### Step 2: Initialize the connector
 
-Create a subgraph:
+```bash
+ddn connector init duckdb  --subgraph my_subgraph  --hub-connector hasura/duckdb
+```
 
-`ddn create subgraph duckdb`
+In the snippet above, we've used the subgraph `my_subgraph` as an example; however, you should change this
+value to match any subgraph which you've created in your project.
 
-Then, create a connector manifest:
-`ddn add connector-manifest duckdb_connector --subgraph duckdb --hub-connector hasura/duckdb --type cloud`
+### Step 3: Modify the connector's port
 
-#### Step 5: Edit the connector manifest
+When you initialized your connector, the CLI generated a set of configuration files, including a Docker Compose file for
+the connector. Typically, connectors default to port `8080`. Each time you add a connector, we recommend incrementing the published port by one to avoid port collisions.
 
-You should have a connector manifest created at `ddn/duckdb/duckdb_connector/connector/duckdb_connector.build.hml`
+As an example, if your connector's configuration is in `my_subgraph/connector/duckdb/dokcer-compose.duckdb.yaml`, you can modify the published port to
+reflect a value that isn't currently being used by any other connectors:
 
 ```yaml
-kind: ConnectorManifest
-version: v1
-spec:
-  supergraphManifests:
-    - base
-definition:
-  name: duckdb_connector
-  type: cloud
-  connector:
-    type: hub
-    name: hasura/duckdb:v0.0.9
-  deployments:
-    - context: .
-      env:
-        DUCKDB_URL:
-          value: ""
+ports:
+  - mode: ingress
+    target: 8080
+    published: "8082"
+    protocol: tcp
 ```
 
-Fill in the value for the DUCKDB_URL environment variable with a DuckDB connection string which looks something like this:
+### Step 4: Add environment variables
 
-`md:?motherduck_token=ey`
+Now that our connector has been scaffolded out for us, we need to provide a connection string so that the data source can be introspected and the
+boilerplate configuration can be taken care of by the CLI.
 
-(Make sure to save your changes to the file!)
+The CLI has provided an `.env.local` file for our connector in the `my_subgraph/connector/duckdb` directory. We can add a key-value pair
+of `DUCKDB_URL` along with the connection string itself to this file, and our connector will use this to connect to our database.
 
-#### Step 6: Start a development session
 
-Start a Hasura dev session using the following command:
+The file, after adding the `DUCKDB_URL`, should look like this example if connecting to a MotherDuck hosted DuckDB instance:
 
-`ddn dev`
-
-You should see something like this: 
-
-```
-12:10PM INF Building SupergraphManifest "base"...
-+---------------+--------------------------------------------------------------------------------------------------+
-| Build Version | 7e01762194                                                                                       |
-+---------------+--------------------------------------------------------------------------------------------------+
-| API URL       | https://pure-sparrow-2887-7e01762194.ddn.hasura.app/graphql                                      |
-+---------------+--------------------------------------------------------------------------------------------------+
-| Console URL   | https://console.hasura.io/project/pure-sparrow-2887/environment/default/build/7e01762194/graphql |
-+---------------+--------------------------------------------------------------------------------------------------+
-| Project Name  | pure-sparrow-2887                                                                                |
-+---------------+--------------------------------------------------------------------------------------------------+
-| Description   | Dev build - Mon, 15 Apr 2024 12:10:17 CDT                                                        |
-+---------------+--------------------------------------------------------------------------------------------------+
+```env
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://local.hasura.dev:4317
+OTEL_SERVICE_NAME=my_subgraph_duckdb
+DUCKDB_URL=md:?motherduck_token=eyJhbGc...
 ```
 
-Navigate to the Console URL and you can issue a query. You can use the default DuckDB example tables to issue this query for example:
+To connect to a local DuckDB file, you can add the persistent DuckDB database file into the `my_subgraph/connector/duckdb` directory, and since all files in this directory will get mounted to the container at `/etc/connector/` you can then point the `DUCKDB_URL` to the local file. Assuming that the duckdb file was named `chinook.db` the file should look like this example:
 
-```graphql
-query QueryHackerNews {
-  duckdb_sampleDataHnHackerNews(
-    limit: 4
-    where: {_or: [{text: {_like: "%Hasura%"}}, {text: {_like: "%DuckDB%"}}]}
-  ) {
-    text
-    id
-  }
-}
+```env
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://local.hasura.dev:4317
+OTEL_SERVICE_NAME=my_subgraph_duckdb
+DUCKDB_URL=/etc/connector/chinook.db
 ```
 
-And get the response:
+### Step 5: Introspect your data source
 
-```
-{
-  "data": {
-    "duckdb_sampleDataHnHackerNews": [
-      {
-        "text": "Experimental Product? Hasura + React<p>Product with market fit and scale needs? Elixir&#x2F;Phoenix",
-        "id": 31480758
-      },
-      {
-        "text": "I just skimmed through the article tbh, but I saw 14 GB and what looked like a predicate pushdown optimization. I think DuckDB could handle that on my 16GB mac.",
-        "id": 32182618
-      },
-      {
-        "text": "To what extent does this headache go away if autogenerating graphql from a relational db, using tools like Postgraphile or Hasura? I never considered making my &quot;own&quot; graphql service but those tools sure make it look easy to create a nice API controller through db migrations.",
-        "id": 31285405
-      },
-      {
-        "text": "Under what circumtances should I prefer to use DuckDB over SQLite or PostgreSQL? It is not clear.",
-        "id": 33285150
-      }
-    ]
-  }
-}
+With the connector configured, we can now use the CLI to introspect our database and create a source-specific configuration file for our connector.
+
+```bash
+ddn connector introspect --connector my_subgraph/connector/duckdb/connector.yaml
 ```
 
-### Setting up the DuckDB connector locally (Coming Soon)
+### Step 6. Create the Hasura metadata
 
-Please keep an eye out for instructions on running things locally which will be coming soon. 
+Hasura DDN uses a concept called "connector linking" to take [NDC-compliant](https://github.com/hasura/ndc-spec)
+configuration JSON files for a data connector and transform them into an `hml` (Hasura Metadata Language) file as a
+[`DataConnectorLink` metadata object](https://hasura.io/docs/3.0/supergraph-modeling/data-connectors#dataconnectorlink-dataconnectorlink).
+
+Basically, metadata objects in `hml` files define our API.
+
+First we need to create this `hml` file with the `connector-link add` command and then convert our configuration files
+into `hml` syntax and add it to this file with the `connector-link update` command.
+
+Let's name the `hml` file the same as our connector, `duckdb`:
+
+```bash
+ddn connector-link add duckdb --subgraph my_subgraph
+```
+
+The new file is scaffolded out at `my_subgraph/metadata/duckdb/duckdb.hml`.
+
+### Step 7. Update the environment variables
+
+The generated file has two environment variables — one for reads and one for writes — that you'll need to add to your subgraph's `.env.my_subgraph` file.
+Each key is prefixed by the subgraph name, an underscore, and the name of the connector. Ensure the port value matches what is published in your connector's docker compose file.
+
+As an example:
+
+```env
+MY_SUBGRAPH_DUCKDB_READ_URL=http://local.hasura.dev:<port>
+MY_SUBGRAPH_DUCKDB_WRITE_URL=http://local.hasura.dev:<port>
+```
+
+These values are for the connector itself and utilize `local.hasura.dev` to ensure proper resolution within the docker container.
+
+### Step 8. Start the connector's Docker Compose
+
+Let's start our connector's Docker Compose file by running the following from inside the connector's subgraph:
+
+```bash
+docker compose -f docker-compose.duckdb.yaml up
+```
+
+### Step 9. Update the new `DataConnectorLink` object
+
+Finally, now that our `DataConnectorLink` has the correct environment variables configured for the connector,
+we can run the update command to have the CLI look at the configuration JSON and transform it to reflect our database's
+schema in `hml` format. In a new terminal tab, run:
+
+```bash
+ddn connector-link update duckdb --subgraph my_subgraph
+```
+
+After this command runs, you can open your `my_subgraph/metadata/duckdb.hml` file and see your metadata completely
+scaffolded out for you 🎉
+
+## Documentation
+
+View the full documentation for the DuckDB connector [here](./docs/index.md).
+
+## Contributing
+
+Check out our [contributing guide](./docs/contributing.md) for more details.
+
+## License
+
+The DuckDB connector is available under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
