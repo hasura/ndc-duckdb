@@ -1,10 +1,10 @@
 # Hasura DuckDB Connector
-<a href="https://hasura.io/"><img src="./docs/logo.svg" align="right" width="200"></a>
+<a href="https://duckdb.org/"><img src="https://github.com/hasura/ndc-duckdb/blob/main/docs/logo.svg" align="right" width="200"></a>
 
 [![Docs](https://img.shields.io/badge/docs-v3.x-brightgreen.svg?style=flat)](https://hasura.io/connectors/duckdb)
 [![ndc-hub](https://img.shields.io/badge/ndc--hub-duckdb-blue.svg?style=flat)](https://hasura.io/connectors/duckdb)
-[![License](https://img.shields.io/badge/license-Apache--2.0-purple.svg?style=flat)](./LICENSE.txt)
-[![Status](https://img.shields.io/badge/status-alpha-yellow.svg?style=flat)](./README.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-purple.svg?style=flat)](https://github.com/hasura/ndc-duckdb/blob/main/LICENSE.txt)
+[![Status](https://img.shields.io/badge/status-alpha-yellow.svg?style=flat)](https://github.com/hasura/ndc-duckdb/blob/main/README.md)
 
 The Hasura DuckDB Connector allows for connecting to a DuckDB database or a MotherDuck hosted DuckDB database to give you an instant GraphQL API on top of your DuckDB data.
 
@@ -66,7 +66,7 @@ value to match any subgraph which you've created in your project.
 When you initialized your connector, the CLI generated a set of configuration files, including a Docker Compose file for
 the connector. Typically, connectors default to port `8080`. Each time you add a connector, we recommend incrementing the published port by one to avoid port collisions.
 
-As an example, if your connector's configuration is in `my_subgraph/connector/duckdb/dokcer-compose.duckdb.yaml`, you can modify the published port to
+As an example, if your connector's configuration is in `my_subgraph/connector/duckdb/docker-compose.duckdb.yaml`, you can modify the published port to
 reflect a value that isn't currently being used by any other connectors:
 
 ```yaml
@@ -166,11 +166,11 @@ scaffolded out for you 🎉
 
 ## Documentation
 
-View the full documentation for the DuckDB connector [here](./docs/index.md).
+View the full documentation for the DuckDB connector [here](https://github.com/hasura/ndc-duckdb/blob/main/docs/index.md).
 
 ## Contributing
 
-Check out our [contributing guide](./docs/contributing.md) for more details.
+Check out our [contributing guide](https://github.com/hasura/ndc-duckdb/blob/main/docs/contributing.md) for more details.
 
 ## License
 
