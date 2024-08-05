@@ -2,7 +2,7 @@ import { CapabilitiesResponse, ScalarType } from "@hasura/ndc-sdk-typescript";
 import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
 
 export const CAPABILITIES_RESPONSE: CapabilitiesResponse = {
-  version: "^0.1.0",
+  version: "0.1.5",
   capabilities: {
     query: {
       variables: {}
