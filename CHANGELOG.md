@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.0.19] - 2024-08-6
+* Update workflow to open a PR in ndc-hub
+
 ## [0.0.18] - 2024-08-5
 * Update SDK to 5.2.0
 * Pin version to 0.1.5

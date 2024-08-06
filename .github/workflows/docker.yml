@@ -26,6 +26,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      commit_hash: ${{ steps.get_commit_hash.outputs.commit_hash }}
+      sha256: ${{ steps.calculate_checksum.outputs.sha256 }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,7 +45,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.PAT_TOKEN }}
       # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about) to extract tags and labels that will be applied to the specified image. The `id` "meta" allows the output of this step to be referenced in a subsequent step. The `images` value provides the base name for the tags and labels.
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -71,6 +74,18 @@ jobs:
           name: connector-definition.tgz
           path: ./connector-definition/dist/connector-definition.tgz
           compression-level: 0 # Already compressed
+
+      - name: Calculate SHA256 checksum
+        id: calculate_checksum
+        run: |
+            SHA256=$(sha256sum ./connector-definition/dist/connector-definition.tgz | awk '{ print $1 }')
+            echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+  
+      - name: Get commit hash
+        id: get_commit_hash
+        run: |           
+            COMMIT_HASH=$(git rev-parse HEAD)
+            echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
 
   release-connector:
     name: Release connector
@@ -101,3 +116,65 @@ jobs:
           files: |
             ./connector-definition/dist/connector-definition.tgz
           fail_on_unmatched_files: true
+
+      - name: Update ndc-hub
+        env:
+            CONNECTOR_NAME: duckdb
+            COMMIT_HASH: ${{ needs.build-and-push-image.outputs.commit_hash }}
+            SHA256: ${{ needs.build-and-push-image.outputs.sha256 }}
+            GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+              # Clone ndc-hub repository
+              git clone https://github.com/hasura/ndc-hub.git
+              cd ndc-hub
+    
+              # Create a new branch
+              NEW_BRANCH="update-${{ env.CONNECTOR_NAME }}-connector-v${{ steps.get-version.outputs.tagged_version }}"
+              git checkout -b $NEW_BRANCH
+  
+              cd registry/${{ env.CONNECTOR_NAME }}
+    
+              # Update metadata.json
+              jq --arg version "${{ steps.get-version.outputs.tagged_version }}" \
+                --arg version_tag "v${{ steps.get-version.outputs.tagged_version }}" \
+                --arg uri "https://github.com/${{ github.repository }}/releases/download/v${{ steps.get-version.outputs.tagged_version }}/connector-definition.tgz" \
+                --arg checksum "$SHA256" \
+                --arg commit_hash "$COMMIT_HASH" \
+                '.overview.latest_version = $version_tag |
+                .packages += [{
+                  "version": $version,
+                  "uri": $uri,
+                  "checksum": {
+                    "type": "sha256",
+                    "value": $checksum
+                  },
+                  "source": {
+                    "hash": $commit_hash
+                  }
+                }] |
+                .source_code.version += [{
+                  "tag": $version_tag,
+                  "hash": $commit_hash,
+                  "is_verified": false
+                }]' \
+                metadata.json > tmp.json && mv tmp.json metadata.json
+    
+              cp ../../../README.md ./README.md
+  
+              # Commit changes
+              git config user.name "GitHub Action"
+              git config user.email "action@github.com"
+              git add metadata.json README.md
+              git commit -m "Update ${{ env.CONNECTOR_NAME }} connector metadata to version ${{ steps.get-version.outputs.tagged_version }}"
+    
+              # Push changes
+              git push https://${{ secrets.PAT_TOKEN }}@github.com/hasura/ndc-hub.git HEAD:update-${{ env.CONNECTOR_NAME }}-connector-v${{ steps.get-version.outputs.tagged_version }}
+  
+  
+              # Create PR using GitHub CLI
+              cd ../..
+              gh pr create --repo hasura/ndc-hub \
+                --base main \
+                --head $NEW_BRANCH \
+                --title "Update ${{ env.CONNECTOR_NAME }} connector to v${{ steps.get-version.outputs.tagged_version }}" \
+                --body "This PR updates the ${{ env.CONNECTOR_NAME }} connector metadata to version ${{ steps.get-version.outputs.tagged_version }}."
