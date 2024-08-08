@@ -7,7 +7,7 @@ import {
   QueryResponse,
   MutationRequest,
   MutationResponse,
-  CapabilitiesResponse,
+  Capabilities,
   ExplainResponse,
   start,
   Connector,
@@ -92,7 +92,7 @@ const connector: Connector<Configuration, State> = {
      * from the NDC specification.
      * @param configuration
      */
-    getCapabilities(_: Configuration): CapabilitiesResponse {
+    getCapabilities(_: Configuration): Capabilities {
         return CAPABILITIES_RESPONSE;
     },
 
@@ -204,7 +204,7 @@ const connector: Connector<Configuration, State> = {
      * @param configuration
      * @param state
      */
-    healthCheck(_: Configuration, __: State): Promise<undefined> {
+    getHealthReadiness(_: Configuration, __: State): Promise<undefined> {
         return Promise.resolve(undefined);
     },
 

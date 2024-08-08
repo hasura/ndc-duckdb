@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.0.21] - 2024-08-8
+* Update SDK version
+
 ## [0.0.20] - 2024-08-8
 * Fix versions in connector-definition
 

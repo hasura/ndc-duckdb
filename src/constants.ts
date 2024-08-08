@@ -1,9 +1,7 @@
-import { CapabilitiesResponse, ScalarType } from "@hasura/ndc-sdk-typescript";
+import { Capabilities, ScalarType } from "@hasura/ndc-sdk-typescript";
 import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
 
-export const CAPABILITIES_RESPONSE: CapabilitiesResponse = {
-  version: "0.1.5",
-  capabilities: {
+export const CAPABILITIES_RESPONSE: Capabilities = {
     query: {
       variables: {}
     },
@@ -15,7 +13,6 @@ export const CAPABILITIES_RESPONSE: CapabilitiesResponse = {
       order_by_aggregate: {},
       relation_comparisons: {}
     }
-  },
 };
 export const MAX_32_INT: number = 2147483647;
 export const SCALAR_TYPES: { [key: string]: ScalarType } = {

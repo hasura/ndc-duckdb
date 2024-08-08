@@ -1,6 +1,6 @@
 {
   "name": "duckdb-sdk",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -13,7 +13,7 @@
     "typescript-json-schema": "^0.62.0"
   },
   "dependencies": {
-    "@hasura/ndc-sdk-typescript": "^5.2.0",
+    "@hasura/ndc-sdk-typescript": "^6.0.0",
     "duckdb": "^1.0.0",
     "sql-formatter": "^13.0.4",
     "sqlstring-sqlite": "^0.1.1"
