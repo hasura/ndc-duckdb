@@ -119,6 +119,7 @@ jobs:
 
       - name: Update ndc-hub
         env:
+            REGISTRY_NAME: hasura
             CONNECTOR_NAME: duckdb
             COMMIT_HASH: ${{ needs.build-and-push-image.outputs.commit_hash }}
             SHA256: ${{ needs.build-and-push-image.outputs.sha256 }}
@@ -127,50 +128,63 @@ jobs:
               # Clone ndc-hub repository
               git clone https://github.com/hasura/ndc-hub.git
               cd ndc-hub
-    
+
               # Create a new branch
               NEW_BRANCH="update-${{ env.CONNECTOR_NAME }}-connector-v${{ steps.get-version.outputs.tagged_version }}"
               git checkout -b $NEW_BRANCH
-  
-              cd registry/${{ env.CONNECTOR_NAME }}
-    
-              # Update metadata.json
-              jq --arg version "${{ steps.get-version.outputs.tagged_version }}" \
-                --arg version_tag "v${{ steps.get-version.outputs.tagged_version }}" \
-                --arg uri "https://github.com/${{ github.repository }}/releases/download/v${{ steps.get-version.outputs.tagged_version }}/connector-definition.tgz" \
-                --arg checksum "$SHA256" \
+
+              cd registry/${{ env.REGISTRY_NAME }}/${{ env.CONNECTOR_NAME }}
+
+              # Create releases directory if it doesn't exist
+              mkdir -p releases/v${{ steps.get-version.outputs.tagged_version }}
+
+              # Create connector-packaging.json
+              cat << EOF > releases/v${{ steps.get-version.outputs.tagged_version }}/connector-packaging.json
+              {
+                "version": "${{ steps.get-version.outputs.tagged_version }}",
+                "uri": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.get-version.outputs.tagged_version }}/connector-definition.tgz",
+                "checksum": {
+                  "type": "sha256",
+                  "value": "$SHA256"
+                },
+                "source": {
+                  "hash": "$COMMIT_HASH"
+                }
+              }
+              EOF
+
+              # Update metadata.json to remove 'packages' field if it exists and update 'latest_version'
+              jq --arg version_tag "v${{ steps.get-version.outputs.tagged_version }}" \
                 --arg commit_hash "$COMMIT_HASH" \
-                '.overview.latest_version = $version_tag |
-                .packages += [{
-                  "version": $version,
-                  "uri": $uri,
-                  "checksum": {
-                    "type": "sha256",
-                    "value": $checksum
-                  },
-                  "source": {
-                    "hash": $commit_hash
-                  }
-                }] |
-                .source_code.version += [{
-                  "tag": $version_tag,
-                  "hash": $commit_hash,
-                  "is_verified": false
-                }]' \
+                'if has("packages") then del(.packages) else . end | 
+                  .overview.latest_version = $version_tag |
+                  if has("source_code") then
+                    .source_code.version += [{
+                      "tag": $version_tag,
+                      "hash": $commit_hash,
+                      "is_verified": false
+                    }]
+                  else
+                    . + {"source_code": {"version": [{
+                      "tag": $version_tag,
+                      "hash": $commit_hash,
+                      "is_verified": false
+                    }]}}
+                  end' \
                 metadata.json > tmp.json && mv tmp.json metadata.json
-    
-              cp ../../../README.md ./README.md
-  
+
+              cp ../../../../README.md ./README.md
+
               # Commit changes
               git config user.name "GitHub Action"
               git config user.email "action@github.com"
-              git add metadata.json README.md
+              git add metadata.json README.md releases
               git commit -m "Update ${{ env.CONNECTOR_NAME }} connector metadata to version ${{ steps.get-version.outputs.tagged_version }}"
-    
+
               # Push changes
               git push https://${{ secrets.PAT_TOKEN }}@github.com/hasura/ndc-hub.git HEAD:update-${{ env.CONNECTOR_NAME }}-connector-v${{ steps.get-version.outputs.tagged_version }}
-  
-  
+
+
               # Create PR using GitHub CLI
               cd ../..
               gh pr create --repo hasura/ndc-hub \
