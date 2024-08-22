@@ -34,36 +34,24 @@ To start the connector on port 9094, for a MotherDuck hosted DuckDB instance run
 
 ### Attach the connector to the locally running engine
 
-There should a file located at `my_subgraph/.env.my_subgraph` that contains 
+There should a file located at `.env` that contains 
 
 ```env
-MY_SUBGRAPH_DUCKDB_READ_URL=http://local.hasura.dev:<port>
-MY_SUBGRAPH_DUCKDB_WRITE_URL=http://local.hasura.dev:<port>
+APP_DUCKDB_READ_URL="http://local.hasura.dev:<port>"
+APP_DUCKDB_WRITE_URL="http://local.hasura.dev:<port>"
 ```
 
-Create a new .env file called `.env.my_subgraph.dev` and place the following values into it:
+Edit the values in the `.env` file to point at port 9094 with the locally running connector.
 
 ```env
-MY_SUBGRAPH_DUCKDB_READ_URL=http://local.hasura.dev:9094
-MY_SUBGRAPH_DUCKDB_WRITE_URL=http://local.hasura.dev:9094
+APP_DUCKDB_READ_URL="http://local.hasura.dev:9094"
+APP_DUCKDB_WRITE_URL="http://local.hasura.dev:9094"
 ```
 
-In your `supergraph.yaml` file change the env file to point to the dev file.
-
-```
-  subgraphs:
-    my_subgraph:
-      generator:
-        rootPath: my_subgraph
-      # envFile: my_subgraph/.env.my_subgraph # Change the env file
-      envFile: my_subgraph/.env.my_subgraph.dev
-      includePaths:
-        - my_subgraph/metadata
-```
 
 Do a local supergraph build:
 
-```ddn supergraph build local --output-dir ./engine```
+```ddn supergraph build local```
 
 Mutations and Queries will now be issued against your locally running connector instance. 
 

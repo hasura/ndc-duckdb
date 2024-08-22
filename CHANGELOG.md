@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.1.0] - 2024-08-22
+* Update Documentation for ndc-hub
+
 ## [0.0.22] - 2024-08-13
 * Update workflow to publish to registry
 
