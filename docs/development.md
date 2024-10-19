@@ -10,6 +10,10 @@ In a new directory, clone the repo using:
 
 ```git clone https://github.com/hasura/ndc-duckdb```
 
+Install npm packages, go into the `ndc-duckdb` repo and run:
+
+```npm install```
+
 ### Run the Introspection
 
 If you are working with a local database file, place the file in the root of the ndc-duckdb directory. 
