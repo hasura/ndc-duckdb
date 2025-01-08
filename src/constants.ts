@@ -16,7 +16,197 @@ export const CAPABILITIES_RESPONSE: Capabilities = {
 };
 export const MAX_32_INT: number = 2147483647;
 export const SCALAR_TYPES: { [key: string]: ScalarType } = {
+  BigInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {
+      // sum: {
+      //   result_type: {
+      //     type: "named",
+      //     name: "Int"
+      //   }
+      // }
+    },
+    comparison_operators: {
+      _eq: {
+        type: "equal",
+      },
+      _gt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigInt",
+        },
+      },
+      _lt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigInt",
+        },
+      },
+      _gte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigInt",
+        },
+      },
+      _lte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigInt",
+        },
+      },
+      _neq: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigInt",
+        },
+      },
+    },
+  },
+  UBigInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: { type: "equal" },
+      _gt: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _lt: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _gte: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _lte: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _neq: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+    },
+  },
+  HugeInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: { type: "equal" },
+      _gt: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _lt: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _gte: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _lte: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _neq: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+    },
+  },
+  UHugeInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: { type: "equal" },
+      _gt: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _lt: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _gte: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _lte: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _neq: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+    },
+  },
+  Timestamp: {
+    representation: {
+      type: "timestamp"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: {
+        type: "equal",
+      },
+      _gt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _lt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _gte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _lte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _neq: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+    },
+  },
+  TimestampTz: {
+    representation: {
+      type: "timestamptz"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: {
+        type: "equal",
+      },
+      _gt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "TimestampTz",
+        },
+      },
+      _lt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "TimestampTz",
+        },
+      },
+      _gte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "TimestampTz",
+        },
+      },
+      _lte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "TimestampTz",
+        },
+      },
+      _neq: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "TimestampTz",
+        },
+      },
+    },
+  },
   Int: {
+    representation: {
+      type: "int64"
+    },
     aggregate_functions: {
       // sum: {
       //   result_type: {
@@ -67,6 +257,9 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     }
   },
   Float: {
+    representation: {
+      type: "float64"
+    },
     aggregate_functions: {
       // sum: {
       //   result_type: {
@@ -117,6 +310,9 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     }
   },
   String: {
+    representation: {
+      type: "string"
+    },
     aggregate_functions: {},
     comparison_operators: {
       _eq: {
@@ -174,6 +370,9 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     }
   },
   Boolean: {
+    representation: {
+      type: "boolean"
+    },
     aggregate_functions: {},
     comparison_operators: {
       _eq: {

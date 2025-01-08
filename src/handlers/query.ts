@@ -1,3 +1,5 @@
+//TODO: Aggregates https://github.com/hasura/ndc-duckduckapi/commit/29cacaddb811cbf0610a98a61d05a0d29da27554
+
 import {
   QueryRequest,
   QueryResponse,
@@ -15,6 +17,77 @@ import { MAX_32_INT } from "../constants";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
+
+function getColumnExpression(field_def: any, collection_alias: string, column: string): string {
+  // Helper function to handle the actual type
+  function handleNamedType(type: any): string {
+    if (type.name === "BigInt") {
+      return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+    }
+    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  }
+  // Helper function to traverse the type structure
+  function processType(type: any): string {
+    if (type.type === "nullable") {
+      if (type.underlying_type.type === "named") {
+        return handleNamedType(type.underlying_type);
+      } else if (type.underlying_type.type === "array") {
+        // Handle array type
+        return processType(type.underlying_type);
+      } else {
+        return processType(type.underlying_type);
+      }
+    } else if (type.type === "array") {
+      // Handle array type
+      return processType(type.element_type);
+    } else if (type.type === "named") {
+      return handleNamedType(type);
+    }
+    // Default case
+    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  }
+  return processType(field_def.type);
+}
+
+function isTimestampType(field_def: any): boolean {
+  if (!field_def) return false;
+  
+  function checkType(type: any): boolean {
+    if (type.type === "nullable") {
+      return checkType(type.underlying_type);
+    }
+    return type.type === "named" && type.name === "Timestamp";
+  }
+  
+  return checkType(field_def.type);
+}
+function getIntegerType(field_def: any): string | null {
+  if (!field_def) return null;
+  
+  function checkType(type: any): string | null {
+    if (type.type === "nullable") {
+      return checkType(type.underlying_type);
+    }
+    if (type.type === "named") {
+      switch (type.name) {
+        case "BigInt": return "BIGINT";
+        case "UBigInt": return "UBIGINT";
+        case "HugeInt": return "HUGEINT";
+        case "UHugeInt": return "UHUGEINT";
+        default: return null;
+      }
+    }
+    return null;
+  }
+  
+  return checkType(field_def.type);
+}
+
+function getRhsExpression(type: string | null): string {
+  if (!type) return "?";
+  return `CAST(? AS ${type})`;
+}
+
 type QueryVariables = {
   [key: string]: any;
 };
@@ -96,7 +169,9 @@ function build_where(
   args: any[],
   variables: QueryVariables,
   prefix: string,
-  collection_aliases: {[k: string]: string}
+  collection_aliases: { [k: string]: string },
+  config: Configuration,
+  query_request: QueryRequest
 ): string {
   let sql = "";
   switch (expression.type) {
@@ -112,6 +187,13 @@ function build_where(
       }
       break;
     case "binary_comparison_operator":
+      const object_type = config.config?.object_types[query_request.collection];
+      const field_def = object_type?.fields[expression.column.name];
+      const isTimestamp = isTimestampType(field_def);
+      const integerType = getIntegerType(field_def);
+      const type = isTimestamp ? "TIMESTAMP" : integerType;
+      const lhs = escape_double(expression.column.name);
+      const rhs = getRhsExpression(type);
       switch (expression.value.type) {
         case "scalar":
           args.push(expression.value.value);
@@ -128,33 +210,33 @@ function build_where(
       }
       switch (expression.operator) {
         case "_eq":
-          sql = `${expression.column.name} = ?`;
+          sql = `${lhs} = ${rhs}`;
           break;
         case "_like":
           args[args.length - 1] = `%${args[args.length - 1]}%`;
-          sql = `${expression.column.name} LIKE ?`;
+          sql = `${lhs} LIKE ?`;
           break;
         case "_glob":
-          sql = `${expression.column.name} GLOB ?`;
+          sql = `${lhs} GLOB ?`;
           break;
         case "_neq":
-          sql = `${expression.column.name} != ?`;
+          sql = `${lhs} != ${rhs}`;
           break;
         case "_gt":
-          sql = `${expression.column.name} > ?`;
+          sql = `${lhs} > ${rhs}`;
           break;
         case "_lt":
-          sql = `${expression.column.name} < ?`;
+          sql = `${lhs} < ${rhs}`;
           break;
         case "_gte":
-          sql = `${expression.column.name} >= ?`;
+          sql = `${lhs} >= ${rhs}`;
           break;
         case "_lte":
-          sql = `${expression.column.name} <= ?`;
+          sql = `${lhs} <= ${rhs}`;
           break;
         default:
           throw new Forbidden(
-            "Binary Comparison Custom Operator not implemented",
+            `Binary Comparison Custom Operator ${expression.operator} not implemented`,
             {}
           );
       }
@@ -165,7 +247,7 @@ function build_where(
       } else {
         const clauses = [];
         for (const expr of expression.expressions) {
-          const res = build_where(expr, collection_relationships, args, variables, prefix, collection_aliases);
+          const res = build_where(expr, collection_relationships, args, variables, prefix, collection_aliases, config, query_request);
           clauses.push(res);
         }
         sql = `(${clauses.join(` AND `)})`;
@@ -177,14 +259,14 @@ function build_where(
       } else {
         const clauses = [];
         for (const expr of expression.expressions) {
-          const res = build_where(expr, collection_relationships, args, variables, prefix, collection_aliases);
+          const res = build_where(expr, collection_relationships, args, variables, prefix, collection_aliases, config, query_request);
           clauses.push(res);
         }
         sql = `(${clauses.join(` OR `)})`;
       }
       break;
     case "not":
-      const not_result = build_where(expression.expression, collection_relationships, args, variables, prefix, collection_aliases);
+      const not_result = build_where(expression.expression, collection_relationships, args, variables, prefix, collection_aliases, config, query_request);
       sql = `NOT (${not_result})`;
       break;
     case "exists":
@@ -198,7 +280,7 @@ function build_where(
         subquery_sql = `
           SELECT 1
           FROM ${from_collection_alias} AS ${escape_double(subquery_alias)}
-          WHERE ${predicate ? build_where(predicate, collection_relationships, args, variables, prefix, collection_aliases) : '1 = 1'}
+          WHERE ${predicate ? build_where(predicate, collection_relationships, args, variables, prefix, collection_aliases, config, query_request) : '1 = 1'}
           AND ${Object.entries(relationship.column_mapping).map(([from, to]) => {
             return `${escape_double(prefix)}.${escape_double(from)} = ${escape_double(subquery_alias)}.${escape_double(to)}`;
           }).join(" AND ")}
@@ -256,7 +338,9 @@ function build_query(
       collect_rows.push(escape_single(field_name));
       switch (field_value.type) {
         case "column":
-          collect_rows.push(`${escape_double(collection_alias)}.${escape_double(field_value.column)}`);
+          const object_type = config.config?.object_types[query_request.collection];
+          const field_def = object_type.fields[field_name];
+          collect_rows.push(getColumnExpression(field_def, collection_alias, field_value.column));
           break;
         case "relationship":
           let relationship_collection = query_request.collection_relationships[field_value.relationship].target_collection;
@@ -303,7 +387,7 @@ function build_query(
   const filter_joins: string[] = [];
 
   if (query.predicate) {
-    where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, args, variables, collection_alias, config.config.collection_aliases)})`);
+    where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, args, variables, collection_alias, config.config.collection_aliases, config, query_request)})`);
   }
 
   if (query.order_by && config.config) {

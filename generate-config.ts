@@ -16,7 +16,7 @@ const con = db.connect();
 const determineType = (t: string): string => {
     switch (t) {
         case "BIGINT":
-            return "Int";
+            return "BigInt";
         case "BIT":
             return "String";
         case "BOOLEAN":
@@ -28,7 +28,7 @@ const determineType = (t: string): string => {
         case "DOUBLE":
             return "Float";
         case "HUGEINT":
-            return "String";
+            return "HugeInt";
         case "INTEGER":
             return "Int";
         case "INTERVAL":
@@ -42,13 +42,15 @@ const determineType = (t: string): string => {
         case "TIME":
             return "String";
         case "TIMESTAMP":
-            return "String";
+            return "Timestamp";
         case "TIMESTAMP WITH TIME ZONE":
-            return "String";
+            return "TimestampTz";
         case "TINYINT":
             return "Int";
         case "UBIGINT":
-            return "String";
+            return "UBigInt";
+        case "UHUGEINT":
+            return "UHugeInt"
         case "UINTEGER":
             return "Int";
         case "USMALLINT":
@@ -58,8 +60,6 @@ const determineType = (t: string): string => {
         case "UUID":
             return "String";
         case "VARCHAR":
-            return "String";
-        case "HUGEINT":
             return "String";
         default:
             if (t.startsWith("DECIMAL")){
@@ -86,22 +86,55 @@ async function main() {
     const tableAliases: {[k: string]: string} = {};
     const objectTypes: { [k: string]: ObjectType } = {};
     const tables = await queryAll(con, "SHOW ALL TABLES");
+
+    // Get table comments
+    const tableComments = await queryAll(con, `
+    SELECT table_name, comment 
+    FROM duckdb_tables() 
+    WHERE schema_name = 'main'
+    `);
+
+    // Create a map of table comments for easier lookup
+    const tableCommentMap = new Map(
+    tableComments.map(row => [row.table_name, row.comment || "No description available"])
+    );
+    // Get all column comments upfront
+    const columnComments = await queryAll(con, `
+    SELECT table_name, column_name, comment 
+    FROM duckdb_columns() 
+    WHERE schema_name = 'main'
+    `);
+    // Create a nested map for column comments: table_name -> column_name -> comment
+    const columnCommentMap = new Map();
+    for (const row of columnComments) {
+    if (!columnCommentMap.has(row.table_name)) {
+        columnCommentMap.set(row.table_name, new Map());
+    }
+    columnCommentMap.get(row.table_name).set(row.column_name, row.comment || "No description available");
+    }
+
     for (let table of tables){
-        const tableName = `${table.database}_${table.schema}_${table.name}`;
+        const tableName = table.name;
         const aliasName = `${table.database}.${table.schema}.${table.name}`;
         tableNames.push(tableName);
         tableAliases[tableName] = aliasName;
         if (!objectTypes[tableName]){
             objectTypes[tableName] = {
-                fields: {}
+                fields: {},
+                description: tableCommentMap.get(tableName) || "No Description Available"
             };
         }
         for (let i = 0; i < table.column_names.length; i++){
-            objectTypes[tableName]['fields'][table.column_names[i]] = {
+            const columnName = table.column_names[i];
+            objectTypes[tableName]["fields"][columnName] = {
                 type: {
-                    type: "named",
-                    name: determineType(table.column_types[i])
-                }
+                    type: "nullable",
+                    underlying_type: {
+                      type: "named",
+                      name: determineType(table.column_types[i]),
+                    },
+                },
+                description: columnCommentMap.get(tableName)?.get(columnName) || "No description available"
             }
         }
     }
