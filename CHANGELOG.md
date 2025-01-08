@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.1.3] - 2025-01-08
+* Bugfix for query builder
+
 ## [0.1.2] - 2025-01-08
 * Fix packaging
 
