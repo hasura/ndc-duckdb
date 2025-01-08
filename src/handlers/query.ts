@@ -8,7 +8,9 @@ import {
   RowSet,
   Forbidden,
   Conflict,
-  Relationship
+  Relationship,
+  ObjectField, 
+  Type
 } from "@hasura/ndc-sdk-typescript";
 import { Configuration, State } from "..";
 const SqlString = require("sqlstring-sqlite");
@@ -18,16 +20,27 @@ import { MAX_32_INT } from "../constants";
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
 
-function getColumnExpression(field_def: any, collection_alias: string, column: string): string {
+function getColumnExpression(field_def: ObjectField, collection_alias: string, column: string): string {
   // Helper function to handle the actual type
-  function handleNamedType(type: any): string {
-    if (type.name === "BigInt") {
-      return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+  function handleNamedType(type: Type): string {
+    if (type.type != "named"){
+      throw new Forbidden("Named type must be named type", {});
     }
-    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+    switch (type.name){
+      case "BigInt":
+        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+      case "UBigInt":
+        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+      case "HugeInt":
+        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+      case "UHugeInt":
+        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+      default:
+        return `${escape_double(collection_alias)}.${escape_double(column)}`;
+    }
   }
   // Helper function to traverse the type structure
-  function processType(type: any): string {
+  function processType(type: Type): string {
     if (type.type === "nullable") {
       if (type.underlying_type.type === "named") {
         return handleNamedType(type.underlying_type);
@@ -56,7 +69,7 @@ function isTimestampType(field_def: any): boolean {
     if (type.type === "nullable") {
       return checkType(type.underlying_type);
     }
-    return type.type === "named" && type.name === "Timestamp";
+    return type.type === "named" && (type.name === "Timestamp" || type.name === "TimestampTz");
   }
   
   return checkType(field_def.type);
@@ -82,7 +95,6 @@ function getIntegerType(field_def: any): string | null {
   
   return checkType(field_def.type);
 }
-
 function getRhsExpression(type: string | null): string {
   if (!type) return "?";
   return `CAST(? AS ${type})`;
@@ -338,7 +350,10 @@ function build_query(
       collect_rows.push(escape_single(field_name));
       switch (field_value.type) {
         case "column":
-          const object_type = config.config?.object_types[query_request.collection];
+            const current_collection = path.length > 1 && relationship_key 
+            ? query_request.collection_relationships[relationship_key].target_collection
+            : query_request.collection;
+          const object_type = config.config?.object_types[current_collection];
           let field_def = object_type.fields[field_value.column];
           collect_rows.push(getColumnExpression(field_def, collection_alias, field_value.column));
           break;
@@ -397,7 +412,7 @@ function build_query(
         case "column":
           if (elem.target.path.length === 0){
             order_elems.push(
-              `${escape_double(collection_alias)}.${escape_double(elem.target.name)} ${elem.order_direction}`
+              `LOWER(${escape_double(collection_alias)}.${escape_double(elem.target.name)}) ${elem.order_direction}`
             );
           } else {
             let currentAlias = collection_alias;

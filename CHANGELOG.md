@@ -1,6 +1,12 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.1.4] - 2025-01-08
+* Update to fix a bug to add support for UBigInt, HugeInt, UHugeInt
+* Add support for Timestamps with Timezone
+* Fix object type mapping on JOINS
+* Cast ORDER BY columns to lowercase so that field sorting yields A a B b rather than A B a b
+
 ## [0.1.3] - 2025-01-08
 * Bugfix for query builder
 
