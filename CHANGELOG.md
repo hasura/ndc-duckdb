@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.1.6] - 2025-01-15
+* Fix github workflow
+
 ## [0.1.5] - 2025-01-15
 * Fix order by LOWER cast
 
