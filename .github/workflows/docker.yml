@@ -141,7 +141,7 @@ jobs:
               # Create connector-packaging.json
               cat << EOF > releases/v${{ steps.get-version.outputs.tagged_version }}/connector-packaging.json
               {
-                "version": "${{ steps.get-version.outputs.tagged_version }}",
+                "version": "v${{ steps.get-version.outputs.tagged_version }}",
                 "uri": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.get-version.outputs.tagged_version }}/connector-definition.tgz",
                 "checksum": {
                   "type": "sha256",
