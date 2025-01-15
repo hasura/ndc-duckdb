@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.1.5] - 2025-01-15
+* Fix order by LOWER cast
+
 ## [0.1.4] - 2025-01-08
 * Update to fix a bug to add support for UBigInt, HugeInt, UHugeInt
 * Add support for Timestamps with Timezone

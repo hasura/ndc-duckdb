@@ -62,7 +62,23 @@ function getColumnExpression(field_def: ObjectField, collection_alias: string, c
   return processType(field_def.type);
 }
 
-function isTimestampType(field_def: any): boolean {
+function isStringType(field_def: ObjectField | undefined): boolean {
+  if (!field_def) return false;
+  
+  function checkType(type: any): boolean {
+    if (type.type === "nullable") {
+      return checkType(type.underlying_type);
+    }
+    if (type.type === "array") {
+      return false;
+    }
+    return type.type === "named" && type.name === "String";
+  }
+  
+  return checkType(field_def.type);
+}
+
+function isTimestampType(field_def: ObjectField | undefined): boolean {
   if (!field_def) return false;
   
   function checkType(type: any): boolean {
@@ -74,7 +90,7 @@ function isTimestampType(field_def: any): boolean {
   
   return checkType(field_def.type);
 }
-function getIntegerType(field_def: any): string | null {
+function getIntegerType(field_def: ObjectField | undefined): string | null {
   if (!field_def) return null;
   
   function checkType(type: any): string | null {
@@ -411,11 +427,16 @@ function build_query(
       switch (elem.target.type) {
         case "column":
           if (elem.target.path.length === 0){
+            const field_def = config.config.object_types[query_request.collection].fields[elem.target.name];
+            const is_string = isStringType(field_def);
+            const field_name = is_string ? `LOWER(${escape_double(collection_alias)}.${escape_double(elem.target.name)})` : `${escape_double(collection_alias)}.${escape_double(elem.target.name)}`
             order_elems.push(
-              `LOWER(${escape_double(collection_alias)}.${escape_double(elem.target.name)}) ${elem.order_direction}`
+              `${field_name} ${elem.order_direction}`
             );
           } else {
             let currentAlias = collection_alias;
+            let current_collection = query_request.collection;
+            let field_def = config.config.object_types[current_collection].fields[elem.target.name];
             for (let path_elem of elem.target.path) {
               const relationship = collection_relationships[path_elem.relationship];
               const nextAlias = `${currentAlias}_${relationship.target_collection}`;
@@ -425,9 +446,13 @@ function build_query(
                 filter_joins.push(join_str);
               }
               currentAlias = nextAlias;
+              current_collection = relationship.target_collection;
+              field_def = config.config.object_types[current_collection].fields[elem.target.name];
             }
+            const is_string = isStringType(field_def);
+            const field_name = is_string ? `LOWER(${escape_double(currentAlias)}.${escape_double(elem.target.name)})` : `${escape_double(currentAlias)}.${escape_double(elem.target.name)}`;
             order_elems.push(
-              `${escape_double(currentAlias)}.${escape_double(elem.target.name)} ${elem.order_direction}`
+              `${field_name} ${elem.order_direction}`
             );
           }
           break;
@@ -569,6 +594,7 @@ export async function do_query(
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
+  // console.log(JSON.stringify(query, null, 4));
   let query_plans = await plan_queries(configuration, query);
   return await perform_query(state, query_plans);
 }
