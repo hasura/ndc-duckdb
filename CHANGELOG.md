@@ -1,6 +1,9 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.1.8] - 2025-01-15
+* Enable Aggregates
+
 ## [0.1.7] - 2025-01-15
 * Fix filtering across relationships
 

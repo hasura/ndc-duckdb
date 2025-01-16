@@ -3,7 +3,8 @@ import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
 
 export const CAPABILITIES_RESPONSE: Capabilities = {
     query: {
-      variables: {}
+      variables: {},
+      aggregates: {}
     },
     mutation: {
       transactional: null,
