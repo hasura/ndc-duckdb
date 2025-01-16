@@ -308,7 +308,7 @@ function build_where(
         subquery_sql = `
           SELECT 1
           FROM ${from_collection_alias} AS ${escape_double(subquery_alias)}
-          WHERE ${predicate ? build_where(predicate, collection_relationships, args, variables, prefix, collection_aliases, config, query_request) : '1 = 1'}
+          WHERE ${predicate ? build_where(predicate, collection_relationships, args, variables, subquery_alias, collection_aliases, config, query_request) : '1 = 1'}
           AND ${Object.entries(relationship.column_mapping).map(([from, to]) => {
             return `${escape_double(prefix)}.${escape_double(from)} = ${escape_double(subquery_alias)}.${escape_double(to)}`;
           }).join(" AND ")}
@@ -594,7 +594,6 @@ export async function do_query(
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
-  // console.log(JSON.stringify(query, null, 4));
   let query_plans = await plan_queries(configuration, query);
   return await perform_query(state, query_plans);
 }
