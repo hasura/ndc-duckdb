@@ -1,6 +1,36 @@
 # DuckDB Connector Changelog
 This changelog documents changes between release tags.
 
+## [0.2.0] - 2025-01-15
+Implement Aggregates
+
+* Basic Aggregates
+    * star_count
+    * single_column
+    * single_column distinct
+
+* Numeric Aggregates:
+    * sum
+    * avg
+    * max
+    * min
+    * stddev
+    * stddev_samp
+    * stddev_pop
+    * variance
+    * var_samp
+    * var_pop
+
+* String Aggregates:
+    * group_concat
+    * group_concat_distinct
+    * group_concat_include_nulls
+
+* Previously, LIKE would automatically wrap the string with %% to do a full-text search, now we allow users to use % on their own so LIKE has full functionality.
+
+* Add BigDecimal scalar type for arbitrary precision decimals so aggregation functions like SUM don't overflow
+
+
 ## [0.1.8] - 2025-01-15
 * Enable Aggregates
 

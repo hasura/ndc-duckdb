@@ -62,8 +62,8 @@ const determineType = (t: string): string => {
         case "VARCHAR":
             return "String";
         default:
-            if (t.startsWith("DECIMAL")){
-                return "Float";
+            if (t.startsWith("DECIMAL") || t.startsWith("NUMERIC")){
+                return "BigDecimal";
             }
             throw new NotSupported("Unsupported type", {});
     }

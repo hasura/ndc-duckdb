@@ -22,12 +22,66 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
       type: "biginteger"
     },
     aggregate_functions: {
-      // sum: {
-      //   result_type: {
-      //     type: "named",
-      //     name: "Int"
-      //   }
-      // }
+      _sum: {
+        result_type: {
+          type: "named",
+          name: "BigInt"
+        }
+      },
+      _avg: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _max: {
+        result_type: {
+          type: "named",
+          name: "BigInt"
+        }
+      },
+      _min: {
+        result_type: {
+          type: "named",
+          name: "BigInt"
+        }
+      },
+      _stddev: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _variance: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      }
     },
     comparison_operators: {
       _eq: {
@@ -74,7 +128,68 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     representation: {
       type: "biginteger"
     },
-    aggregate_functions: {},
+    aggregate_functions: {
+      _sum: {
+        result_type: {
+          type: "named",
+          name: "UBigInt"
+        }
+      },
+      _avg: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _max: {
+        result_type: {
+          type: "named",
+          name: "UBigInt"
+        }
+      },
+      _min: {
+        result_type: {
+          type: "named",
+          name: "UBigInt"
+        }
+      },
+      _stddev: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _variance: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      }
+    },
     comparison_operators: {
       _eq: { type: "equal" },
       _gt: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
@@ -88,7 +203,68 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     representation: {
       type: "biginteger"
     },
-    aggregate_functions: {},
+    aggregate_functions: {
+      _sum: {
+        result_type: {
+          type: "named",
+          name: "HugeInt"
+        }
+      },
+      _avg: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _max: {
+        result_type: {
+          type: "named",
+          name: "HugeInt"
+        }
+      },
+      _min: {
+        result_type: {
+          type: "named",
+          name: "HugeInt"
+        }
+      },
+      _stddev: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _variance: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      }
+    },
     comparison_operators: {
       _eq: { type: "equal" },
       _gt: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
@@ -102,7 +278,68 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     representation: {
       type: "biginteger"
     },
-    aggregate_functions: {},
+    aggregate_functions: {
+      _sum: {
+        result_type: {
+          type: "named",
+          name: "UHugeInt"
+        }
+      },
+      _avg: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _max: {
+        result_type: {
+          type: "named",
+          name: "UHugeInt"
+        }
+      },
+      _min: {
+        result_type: {
+          type: "named",
+          name: "UHugeInt"
+        }
+      },
+      _stddev: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _variance: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      }
+    },
     comparison_operators: {
       _eq: { type: "equal" },
       _gt: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
@@ -209,12 +446,66 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
       type: "int64"
     },
     aggregate_functions: {
-      // sum: {
-      //   result_type: {
-      //     type: "named",
-      //     name: "Int"
-      //   }
-      // }
+      _sum: {
+        result_type: {
+          type: "named",
+          name: "BigInt"
+        }
+      },
+      _avg: {
+        result_type: {
+          type: "named",
+          name: "Float"
+        }
+      },
+      _max: {
+        result_type: {
+          type: "named",
+          name: "Int"
+        }
+      },
+      _min: {
+        result_type: {
+          type: "named",
+          name: "Int"
+        }
+      },
+      _stddev: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _variance: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      }
     },
     comparison_operators: {
       _eq: {
@@ -262,12 +553,66 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
       type: "float64"
     },
     aggregate_functions: {
-      // sum: {
-      //   result_type: {
-      //     type: "named",
-      //     name: "Float"
-      //   }
-      // }
+      _sum: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _avg: {
+        result_type: {
+          type: "named",
+          name: "Float"
+        }
+      },
+      _max: {
+        result_type: {
+          type: "named",
+          name: "Float"
+        }
+      },
+      _min: {
+        result_type: {
+          type: "named",
+          name: "Float"
+        }
+      },
+      _stddev: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _variance: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      }
     },
     comparison_operators: {
       _eq: {
@@ -314,7 +659,26 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     representation: {
       type: "string"
     },
-    aggregate_functions: {},
+    aggregate_functions: {
+      _group_concat: {
+        result_type: {
+          type: "named",
+          name: "String"
+        }
+      },
+      _group_concat_distinct: {
+        result_type: {
+          type: "named",
+          name: "String"
+        }
+      },
+      _group_concat_include_nulls: {
+        result_type: {
+          type: "named",
+          name: "String"
+        }
+      },
+    },
     comparison_operators: {
       _eq: {
         type: "equal"
@@ -380,7 +744,114 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
         type: "equal"
       },
     },
-  }
+  },
+  BigDecimal: {
+    representation: {
+      type: "bigdecimal"
+    },
+    aggregate_functions: {
+      _sum: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _avg: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _max: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _min: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _stddev_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _variance: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_samp: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      },
+      _var_pop: {
+        result_type: {
+          type: "named",
+          name: "BigDecimal"
+        }
+      }
+    },
+    comparison_operators: {
+      _eq: {
+        type: "equal",
+      },
+      _gt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigDecimal",
+        },
+      },
+      _lt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigDecimal",
+        },
+      },
+      _gte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigDecimal",
+        },
+      },
+      _lte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigDecimal",
+        },
+      },
+      _neq: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "BigDecimal",
+        },
+      },
+    },
+  },
 };
 export const DUCKDB_CONFIG = {
   'custom_user_agent': 'hasura'

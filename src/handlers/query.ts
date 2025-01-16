@@ -1,5 +1,4 @@
-//TODO: Aggregates https://github.com/hasura/ndc-duckduckapi/commit/29cacaddb811cbf0610a98a61d05a0d29da27554
-
+// TODO: Use duckdb-async?
 import {
   QueryRequest,
   QueryResponse,
@@ -241,7 +240,6 @@ function build_where(
           sql = `${lhs} = ${rhs}`;
           break;
         case "_like":
-          args[args.length - 1] = `%${args[args.length - 1]}%`;
           sql = `${lhs} LIKE ?`;
           break;
         case "_glob":
@@ -355,11 +353,6 @@ function build_query(
   let order_by_sql = ``;
   let collect_rows = [];
   let where_conditions = ["WHERE 1"];
-  if (query.aggregates) {
-    run_agg = true;
-    agg_sql = "... todo";
-    throw new Forbidden("Aggregates not implemented yet!", {});
-  }
   if (query.fields) {
     run_sql = true;
     for (let [field_name, field_value] of Object.entries(query.fields)) {
@@ -502,6 +495,125 @@ ${offset_sql}
     // console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
   }
 
+  if (query.aggregates) {
+    run_agg = true;
+    let agg_columns: string[] = [];
+    let agg_where_conditions = ["WHERE 1"];
+  
+    if (path.length > 1 && relationship_key !== null) {
+      let relationship = query_request.collection_relationships[relationship_key];
+      let parent_alias = path.slice(0, -1).join("_");
+      agg_where_conditions.push(
+        ...Object.entries(relationship.column_mapping).map(([from, to]) => {
+          return `${escape_double(parent_alias)}.${escape_double(from)} = ${escape_double(collection_alias)}.${escape_double(to)}`;
+        })
+      );
+    }
+  
+    if (query.predicate) {
+      agg_where_conditions.push(
+        `(${build_where(
+          query.predicate,
+          query_request.collection_relationships,
+          agg_args,
+          variables,
+          collection_alias,
+          config.config?.collection_aliases || {},
+          config,
+          query_request
+        )})`
+      );
+    }
+  
+    for (const [agg_name, agg_value] of Object.entries(query.aggregates)) {
+      if (agg_value.type === "star_count") {
+        agg_columns.push(`COUNT(*) as ${escape_double(agg_name)}`);
+      } else if (agg_value.type === "column_count") {
+        const column = `subq.${escape_double(agg_value.column)}`;
+        const column_expr = agg_value.distinct
+          ? `COUNT(DISTINCT ${column})`
+          : `COUNT(${column})`;
+        agg_columns.push(`${column_expr} as ${escape_double(agg_name)}`);
+      } else if (agg_value.type === "single_column") {
+        const column = `subq.${escape_double(agg_value.column)}`;
+        switch (agg_value.function) {
+          case "_sum":
+            agg_columns.push(`SUM(${column}) as ${escape_double(agg_name)}`);
+            break;
+          case "_avg":
+            agg_columns.push(`AVG(${column}) as ${escape_double(agg_name)}`);
+            break;
+          case "_max":
+            agg_columns.push(`MAX(${column}) as ${escape_double(agg_name)}`);
+            break;
+          case "_min":
+            agg_columns.push(`MIN(${column}) as ${escape_double(agg_name)}`);
+            break;
+          case "_stddev":
+            case "_stddev_samp":
+              const stdevSampleFormula = `SQRT(
+                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+                / (COUNT(*) * (COUNT(*) - 1))
+              )`;
+              agg_columns.push(`${stdevSampleFormula} as ${escape_double(agg_name)}`);
+              break;
+            case "_stddev_pop":
+              const stdevPopFormula = `SQRT(
+                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+                / (COUNT(*) * COUNT(*))
+              )`;
+              agg_columns.push(`${stdevPopFormula} as ${escape_double(agg_name)}`);
+              break;
+            case "_variance":
+            case "_var_samp":
+              const varianceSampleFormula = `(
+                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+                / (COUNT(*) * (COUNT(*) - 1))
+              )`;
+              agg_columns.push(`${varianceSampleFormula} as ${escape_double(agg_name)}`);
+              break;
+            case "_var_pop":
+              const variancePopFormula = `(
+                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+                / (COUNT(*) * COUNT(*))
+              )`;
+              agg_columns.push(`${variancePopFormula} as ${escape_double(agg_name)}`);
+              break;
+          case "_group_concat":
+            agg_columns.push(`GROUP_CONCAT(${column}) as ${escape_double(agg_name)}`);
+            break;
+          case "_group_concat_distinct":
+            agg_columns.push(`GROUP_CONCAT(DISTINCT ${column}) as ${escape_double(agg_name)}`);
+            break;
+          case "_group_concat_include_nulls":
+            agg_columns.push(`GROUP_CONCAT(COALESCE(${column}, 'NULL')) as ${escape_double(agg_name)}`);
+            break;
+          default:
+            throw new Forbidden(`Unsupported aggregate function: ${agg_value.function}`, {});
+        }
+      }
+    }
+  
+    agg_sql = wrap_data(`
+      SELECT JSON_OBJECT(
+        ${agg_columns
+          .map((col) => {
+            const parts = col.split(" as ");
+            return `${escape_single(parts[1].replace('"', '').replace('"', ''))}, ${parts[0]}`;
+          })
+          .join(",")}
+      ) as data
+      FROM (
+        SELECT * 
+        FROM ${from_sql}
+        ${agg_where_conditions.join(" AND ")}  
+        ${order_by_sql}
+        ${limit_sql}
+        ${offset_sql}
+      ) subq
+    `);
+  }
+
   return {
     runSql: run_sql,
     runAgg: run_agg,
@@ -579,12 +691,44 @@ async function perform_query(
   state: State,
   query_plans: SQLQuery[]
 ): Promise<QueryResponse> {
-  const con = state.client.connect();
   const response: RowSet[] = [];
   for (let query_plan of query_plans) {
-    const res = await do_all(con, query_plan);
-    const row_set = JSON.parse(res[0]["data"] as string) as RowSet;
-    response.push(row_set);
+    try {
+      const connection = state.client.connect();
+      let row_set: RowSet = {};  // Start with empty object
+
+      if (query_plan.runAgg) {
+        const aggRes = await do_all(connection, {
+          runSql: true,
+          runAgg: false,
+          sql: query_plan.aggSql,
+          args: query_plan.aggArgs,
+          aggSql: "",
+          aggArgs: [],
+        });
+        const parsedAggData = JSON.parse(aggRes[0]["data"]);
+        row_set.aggregates = parsedAggData;
+      }
+      
+      if (query_plan.runSql) {
+        const res = await do_all(connection, {
+          runSql: true,
+          runAgg: false,
+          sql: query_plan.sql,
+          args: query_plan.args,
+          aggSql: "",
+          aggArgs: [],
+        });
+        const regular_results = JSON.parse(res[0]["data"]);
+        row_set.rows = regular_results.rows;
+      }
+
+      response.push(row_set);
+      connection.close();
+    } catch (err) {
+      console.error("Error performing query: " + err);
+      throw err;
+    }
   }
   return response;
 }
@@ -594,6 +738,7 @@ export async function do_query(
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
+  // console.log(JSON.stringify(query, null, 4));
   let query_plans = await plan_queries(configuration, query);
   return await perform_query(state, query_plans);
 }
