@@ -381,25 +381,50 @@ function build_query(
         case "relationship":
           let relationship_collection = query_request.collection_relationships[field_value.relationship].target_collection;
           let relationship_collection_alias = config.config.collection_aliases[relationship_collection];
+
+          const subquery = build_query(
+            config,
+            query_request,
+            relationship_collection_alias,
+            field_value.query,
+            path,
+            variables,
+            args,
+            agg_args,
+            group_args,
+            field_value.relationship,
+            collection_relationships,
+            collection_aliases
+          );
+
+          let relationship_sql = '';
+          const hasOnlyAggregates = subquery.runAgg && !field_value.query.fields;
+
+          if (hasOnlyAggregates) {
+            relationship_sql = `
+              SELECT JSON_OBJECT(
+                'aggregates', (
+                  ${subquery.aggSql}
+                )
+              )
+            `;
+          } else if (subquery.runAgg) {
+            relationship_sql = `
+              SELECT JSON_OBJECT(
+                'rows', JSON((${subquery.sql})).rows,
+                'aggregates', (
+                  ${subquery.aggSql}
+                )
+              )
+            `;
+          } else {
+            relationship_sql = subquery.sql;
+          }
+
           collect_rows.push(
             `COALESCE((
-              ${
-                build_query(
-                  config,
-                  query_request,
-                  relationship_collection_alias,
-                  field_value.query,
-                  path,
-                  variables,
-                  args,
-                  agg_args,
-                  group_args,
-                  field_value.relationship,
-                  collection_relationships,
-                  collection_aliases
-                ).sql
-              }), JSON('[]')
-            )`
+              ${relationship_sql}
+            ), JSON('[]'))`
           );
           path.pop();
           break;
