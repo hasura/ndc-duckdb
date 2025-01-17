@@ -121,6 +121,7 @@ async function main() {
         if (!objectTypes[tableName]){
             objectTypes[tableName] = {
                 fields: {},
+                foreign_keys: {},
                 description: tableCommentMap.get(tableName) || "No Description Available"
             };
         }

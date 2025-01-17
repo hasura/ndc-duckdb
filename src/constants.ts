@@ -4,7 +4,13 @@ import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
 export const CAPABILITIES_RESPONSE: Capabilities = {
     query: {
       variables: {},
-      aggregates: {}
+      aggregates: {
+        group_by: {
+          filter: {},
+          order: {},
+          paginate: {}
+        }
+      }
     },
     mutation: {
       transactional: null,
@@ -23,60 +29,62 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _sum: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigInt"
         }
       },
       _avg: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _max: {
-        result_type: {
-          type: "named",
-          name: "BigInt"
-        }
+        type: "max",
       },
       _min: {
-        result_type: {
-          type: "named",
-          name: "BigInt"
-        }
+        type: "min"
       },
       _stddev: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _variance: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
@@ -130,60 +138,62 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _sum: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "UBigInt"
         }
       },
       _avg: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _max: {
-        result_type: {
-          type: "named",
-          name: "UBigInt"
-        }
+        type: "max"
       },
       _min: {
-        result_type: {
-          type: "named",
-          name: "UBigInt"
-        }
+        type: "min"
       },
       _stddev: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _variance: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
@@ -205,60 +215,62 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _sum: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "HugeInt"
         }
       },
       _avg: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _max: {
-        result_type: {
-          type: "named",
-          name: "HugeInt"
-        }
+        type: "max"
       },
       _min: {
-        result_type: {
-          type: "named",
-          name: "HugeInt"
-        }
+        type: "min"
       },
       _stddev: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _variance: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
@@ -280,60 +292,62 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _sum: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "UHugeInt"
         }
       },
       _avg: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _max: {
-        result_type: {
-          type: "named",
-          name: "UHugeInt"
-        }
+        type: "max"
       },
       _min: {
-        result_type: {
-          type: "named",
-          name: "UHugeInt"
-        }
+        type: "min"
       },
       _stddev: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _variance: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
@@ -447,60 +461,62 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _sum: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigInt"
         }
       },
       _avg: {
+        type: "custom",
         result_type: {
           type: "named",
-          name: "Float"
+          name: "BigDecimal"
         }
       },
       _max: {
-        result_type: {
-          type: "named",
-          name: "Int"
-        }
+        type: "max"
       },
       _min: {
-        result_type: {
-          type: "named",
-          name: "Int"
-        }
+        type: "min"
       },
       _stddev: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _variance: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
@@ -554,60 +570,62 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _sum: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _avg: {
+        type: "custom",
         result_type: {
           type: "named",
-          name: "Float"
+          name: "BigDecimal"
         }
       },
       _max: {
-        result_type: {
-          type: "named",
-          name: "Float"
-        }
+        type: "max"
       },
       _min: {
-        result_type: {
-          type: "named",
-          name: "Float"
-        }
+        type: "min"
       },
       _stddev: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _variance: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
@@ -661,23 +679,26 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _group_concat: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "String"
         }
       },
       _group_concat_distinct: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "String"
         }
       },
       _group_concat_include_nulls: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "String"
         }
-      },
+      }
     },
     comparison_operators: {
       _eq: {
@@ -751,60 +772,62 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     aggregate_functions: {
       _sum: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _avg: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _max: {
-        result_type: {
-          type: "named",
-          name: "BigDecimal"
-        }
+        type: "max"
       },
       _min: {
-        result_type: {
-          type: "named",
-          name: "BigDecimal"
-        }
+        type: "min"
       },
       _stddev: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _stddev_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _variance: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_samp: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"
         }
       },
       _var_pop: {
+        type: "custom",
         result_type: {
           type: "named",
           name: "BigDecimal"

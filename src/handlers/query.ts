@@ -122,10 +122,13 @@ type QueryVariables = {
 export type SQLQuery = {
   runSql: boolean;
   runAgg: boolean;
+  runGroup: boolean;
   sql: string;
   args: any[];
   aggSql: string;
   aggArgs: any[];
+  groupSql: string;
+  groupArgs: any[];
 };
 
 const json_replacer = (key: string, value: any): any => {
@@ -203,6 +206,9 @@ function build_where(
   let sql = "";
   switch (expression.type) {
     case "unary_comparison_operator":
+      if (expression.column.type === "aggregate"){
+        throw new Forbidden("Binary Comparison Operator Aggregate not implemented", {});
+      }
       switch (expression.operator) {
         case "is_null":
           sql = `${expression.column.name} IS NULL`;
@@ -214,6 +220,9 @@ function build_where(
       }
       break;
     case "binary_comparison_operator":
+      if (expression.column.type === "aggregate"){
+        throw new Forbidden("Binary Comparison Operator Aggregate not implemented", {});
+      }
       const object_type = config.config?.object_types[query_request.collection];
       const field_def = object_type?.fields[expression.column.name];
       const isTimestamp = isTimestampType(field_def);
@@ -332,6 +341,7 @@ function build_query(
   variables: QueryVariables,
   args: any[],
   agg_args: any[],
+  group_args: any[],
   relationship_key: string | null,
   collection_relationships: {
     [k: string]: Relationship;
@@ -343,8 +353,10 @@ function build_query(
   }
   let sql = "";
   let agg_sql = "";
+  let group_sql = "";
   let run_sql = false;
   let run_agg = false;
+  let run_group = false;
   path.push(collection);
   let collection_alias = path.join("_");
 
@@ -381,6 +393,7 @@ function build_query(
                   variables,
                   args,
                   agg_args,
+                  group_args,
                   field_value.relationship,
                   collection_relationships,
                   collection_aliases
@@ -422,7 +435,7 @@ function build_query(
           if (elem.target.path.length === 0){
             const field_def = config.config.object_types[query_request.collection].fields[elem.target.name];
             const is_string = isStringType(field_def);
-            const field_name = is_string ? `LOWER(${escape_double(collection_alias)}.${escape_double(elem.target.name)})` : `${escape_double(collection_alias)}.${escape_double(elem.target.name)}`
+            const field_name = is_string ? `${escape_double(collection_alias)}.${escape_double(elem.target.name)} COLLATE NOCASE` : `${escape_double(collection_alias)}.${escape_double(elem.target.name)}`
             order_elems.push(
               `${field_name} ${elem.order_direction}`
             );
@@ -443,22 +456,14 @@ function build_query(
               field_def = config.config.object_types[current_collection].fields[elem.target.name];
             }
             const is_string = isStringType(field_def);
-            const field_name = is_string ? `LOWER(${escape_double(currentAlias)}.${escape_double(elem.target.name)})` : `${escape_double(currentAlias)}.${escape_double(elem.target.name)}`;
+            const field_name = is_string ? `${escape_double(currentAlias)}.${escape_double(elem.target.name)} COLLATE NOCASE` : `${escape_double(currentAlias)}.${escape_double(elem.target.name)}`;
             order_elems.push(
               `${field_name} ${elem.order_direction}`
             );
           }
           break;
-        case "single_column_aggregate":
-          throw new Forbidden(
-            "Single Column Aggregate not supported yet",
-            {}
-          );
-        case "star_count_aggregate":
-          throw new Forbidden(
-            "Single Column Aggregate not supported yet",
-            {}
-          );
+        case "aggregate":
+          throw new Forbidden("Order By Aggregate not supported yet", {});
         default:
           throw new Forbidden("The types lied 😭", {});
       }
@@ -489,11 +494,6 @@ ${order_by_sql}
 ${limit_sql}
 ${offset_sql}
 `);
-
-  if (path.length === 1) {
-    sql = wrap_data(sql);
-    // console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
-  }
 
   if (query.aggregates) {
     run_agg = true;
@@ -614,13 +614,22 @@ ${offset_sql}
     `);
   }
 
+  if (path.length === 1) {
+    sql = wrap_data(sql);
+    // console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
+    // console.log(format(formatSQLWithArgs(agg_sql, agg_args), { language: "sqlite" }));
+  }
+
   return {
     runSql: run_sql,
     runAgg: run_agg,
+    runGroup: run_group,
     sql,
     args,
     aggSql: agg_sql,
     aggArgs: agg_args,
+    groupSql: group_sql,
+    groupArgs: group_args
   };
 }
 
@@ -647,6 +656,7 @@ export async function plan_queries(
         query_variables,
         [],
         [],
+        [],
         null,
         query.collection_relationships,
         configuration.config.collection_aliases
@@ -664,6 +674,7 @@ export async function plan_queries(
       query.query,
       [],
       {},
+      [],
       [],
       [],
       null,
@@ -695,32 +706,42 @@ async function perform_query(
   for (let query_plan of query_plans) {
     try {
       const connection = state.client.connect();
-      let row_set: RowSet = {};  // Start with empty object
-
-      if (query_plan.runAgg) {
-        const aggRes = await do_all(connection, {
-          runSql: true,
-          runAgg: false,
-          sql: query_plan.aggSql,
-          args: query_plan.aggArgs,
-          aggSql: "",
-          aggArgs: [],
-        });
-        const parsedAggData = JSON.parse(aggRes[0]["data"]);
-        row_set.aggregates = parsedAggData;
-      }
+      let row_set: RowSet = {};  // Start with empty object 
       
       if (query_plan.runSql) {
         const res = await do_all(connection, {
           runSql: true,
           runAgg: false,
+          runGroup: false,
           sql: query_plan.sql,
           args: query_plan.args,
           aggSql: "",
           aggArgs: [],
+          groupSql: "",
+          groupArgs: []
         });
         const regular_results = JSON.parse(res[0]["data"]);
         row_set.rows = regular_results.rows;
+      }
+
+      if (query_plan.runAgg) {
+        const aggRes = await do_all(connection, {
+          runSql: true,
+          runAgg: false,
+          runGroup: false,
+          sql: query_plan.aggSql,
+          args: query_plan.aggArgs,
+          aggSql: "",
+          aggArgs: [],
+          groupSql: "",
+          groupArgs: []
+        });
+        const parsedAggData = JSON.parse(aggRes[0]["data"]);
+        row_set.aggregates = parsedAggData;
+      }
+
+      if (!query_plan.runSql && !query_plan.runAgg){
+        throw new Forbidden("Must run something 😭", {});
       }
 
       response.push(row_set);
@@ -730,6 +751,7 @@ async function perform_query(
       throw err;
     }
   }
+  // console.log(JSON.stringify(response, null, 4));
   return response;
 }
 

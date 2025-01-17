@@ -13,7 +13,7 @@
     "typescript-json-schema": "^0.62.0"
   },
   "dependencies": {
-    "@hasura/ndc-sdk-typescript": "^6.0.0",
+    "@hasura/ndc-sdk-typescript": "^8.0.0-rc.0",
     "duckdb": "^1.0.0",
     "sql-formatter": "^13.0.4",
     "sqlstring-sqlite": "^0.1.1"
