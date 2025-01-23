@@ -115,6 +115,95 @@ function getRhsExpression(type: string | null): string {
   return `CAST(? AS ${type})`;
 }
 
+function buildSingleColumnAggregate(column: string, func: string, agg_name: string): string {
+  switch (func) {
+    // Basic aggregates
+    case "_sum": 
+      return `SUM(${column}) as ${escape_double(agg_name)}`;
+    case "_avg": 
+      return `AVG(${column}) as ${escape_double(agg_name)}`;
+    case "_max": 
+      return `MAX(${column}) as ${escape_double(agg_name)}`;
+    case "_min": 
+      return `MIN(${column}) as ${escape_double(agg_name)}`;
+    
+    // Statistical functions
+    case "_stddev":
+    case "_stddev_samp": {
+      const formula = `SQRT(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * (COUNT(*) - 1))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    case "_stddev_pop": {
+      const formula = `SQRT(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * COUNT(*))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    case "_variance":
+    case "_var_samp": {
+      const formula = `(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * (COUNT(*) - 1))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    case "_var_pop": {
+      const formula = `(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * COUNT(*))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    
+    // String aggregates
+    case "_group_concat":
+      return `GROUP_CONCAT(${column}) as ${escape_double(agg_name)}`;
+    case "_group_concat_distinct":
+      return `GROUP_CONCAT(DISTINCT ${column}) as ${escape_double(agg_name)}`;
+    case "_group_concat_include_nulls":
+      return `GROUP_CONCAT(COALESCE(${column}, 'NULL')) as ${escape_double(agg_name)}`;
+    default:
+      throw new Forbidden(`Unsupported aggregate function: ${func}`, {});
+  }
+}
+
+function buildAggregateColumns(
+  aggregates: { [key: string]: any }, 
+  subquery_prefix: string = 'subq'
+): string[] {
+  const agg_columns: string[] = [];
+  for (const [agg_name, agg_value] of Object.entries(aggregates)) {
+    switch (agg_value.type) {
+      case "star_count": 
+        agg_columns.push(`COUNT(*) as ${escape_double(agg_name)}`);
+        break;
+      case "column_count": {
+        const column = `${subquery_prefix}.${escape_double(agg_value.column)}`;
+        const column_expr = agg_value.distinct
+          ? `COUNT(DISTINCT ${column})`
+          : `COUNT(${column})`;
+        agg_columns.push(`${column_expr} as ${escape_double(agg_name)}`);
+        break;
+      }
+      case "single_column": {
+        const column = `${subquery_prefix}.${escape_double(agg_value.column)}`;
+        agg_columns.push(
+          buildSingleColumnAggregate(column, agg_value.function, agg_name)
+        );
+        break;
+      }
+      default:
+        throw new Forbidden(`Unsupported aggregate type: ${agg_value.type}`, {});
+    }
+  }
+  return agg_columns;
+}
+
+
 type QueryVariables = {
   [key: string]: any;
 };
@@ -129,32 +218,6 @@ export type SQLQuery = {
   aggArgs: any[];
   groupSql: string;
   groupArgs: any[];
-};
-
-const json_replacer = (key: string, value: any): any => {
-  if (typeof value === "bigint") {
-    return value.toString();
-  } else if (typeof value === "object" && value.type === "Buffer") {
-    return Buffer.from(value.data).toString();
-  } else if (
-    typeof value === "object" &&
-    value !== null &&
-    "months" in value &&
-    "days" in value &&
-    "micros" in value
-  ) {
-    // Convert to ISO 8601 duration format
-    const months = value.months;
-    const days = value.days;
-    const total_seconds = value.micros / 1e6; // Convert microseconds to seconds
-    // Construct the duration string
-    let duration = "P";
-    if (months > 0) duration += `${months}M`;
-    if (days > 0) duration += `${days}D`;
-    if (total_seconds > 0) duration += `T${total_seconds}S`;
-    return duration;
-  }
-  return value;
 };
 
 const formatSQLWithArgs = (sql: string, args: any[]): string => {
@@ -358,13 +421,16 @@ function build_query(
   let run_agg = false;
   let run_group = false;
   path.push(collection);
+  // console.log(`ENTERING ${path}`);
   let collection_alias = path.join("_");
+  let from_sql = `${collection} as ${escape_double(collection_alias)}`;
 
   let limit_sql = ``;
   let offset_sql = ``;
   let order_by_sql = ``;
   let collect_rows = [];
   let where_conditions = ["WHERE 1"];
+  let agg_where_conditions = ["WHERE 1"];
   if (query.fields) {
     run_sql = true;
     for (let [field_name, field_value] of Object.entries(query.fields)) {
@@ -427,22 +493,124 @@ function build_query(
             ), JSON('[]'))`
           );
           path.pop();
+          // console.log(`RETURNING TO ${path}`);
           break;
         default:
           throw new Conflict("The types tricked me. 😭", {});
       }
     }
   }
-  let from_sql = `${collection} as ${escape_double(collection_alias)}`;
+
+  if (query.groups) {
+    run_group = true;
+    const { dimensions, aggregates } = query.groups;
+
+    const dimensionExpressions = dimensions.map(dim => {
+      if (dim.type !== "column") {
+        throw new Forbidden("Only column dimensions are supported", {});
+      }
+      
+      const object_type = config.config?.object_types[query_request.collection];
+      const field_def = object_type?.fields[dim.column_name];
+      
+      if (!field_def) {
+        return `subq.${escape_double(dim.column_name)}`;
+      }
+
+      function handleNamedType(type: Type): string {
+        if (type.type != "named") {
+          throw new Forbidden("Named type must be named type", {});
+        }
+        switch (type.name) {
+          case "BigInt":
+          case "UBigInt":
+          case "HugeInt":
+          case "UHugeInt":
+            return `CAST(subq.${escape_double(dim.column_name)} AS TEXT)`;
+          default:
+            return `subq.${escape_double(dim.column_name)}`;
+        }
+      }
+
+      function processType(type: Type): string {
+        if (type.type === "nullable") {
+          if (type.underlying_type.type === "named") {
+            return handleNamedType(type.underlying_type);
+          } else if (type.underlying_type.type === "array") {
+            return processType(type.underlying_type);
+          } else {
+            return processType(type.underlying_type);
+          }
+        } else if (type.type === "array") {
+          return processType(type.element_type);
+        } else if (type.type === "named") {
+          return handleNamedType(type);
+        }
+        return `subq.${escape_double(dim.column_name)}`;
+      }
+
+      return processType(field_def.type);
+    });
+
+    if (query.groups.order_by){
+      throw new Forbidden("Grouping order by not supported yet", {});
+    }
+
+    if (query.groups.predicate){
+      throw new Forbidden("Grouping with predicate not supported yet", {});
+    }
+
+    const dimensionNames = dimensions.map(d => d.column_name);
+
+    const agg_columns = buildAggregateColumns(aggregates, "subq");
+
+    group_sql = `
+    SELECT COALESCE(
+      JSON_GROUP_ARRAY(
+        JSON_OBJECT(
+          'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
+          'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
+            `${escape_single(name)}, ${escape_double(name)}`
+          ).join(', ')})
+        )
+      ),
+      JSON('[]')
+    ) as data
+    FROM (
+      SELECT
+        ${dimensionExpressions.map((expr, i) => `${expr} as ${escape_double(dimensionNames[i])}`).join(', ')},
+        ${agg_columns.join(', ')}
+      FROM (
+        SELECT * 
+        FROM ${collection} as ${escape_double(collection_alias)}
+        ${""}
+        ${""}
+        ${query.groups.limit ? query.groups.limit : ""}
+        ${query.groups.offset ? query.groups.offset : ""}
+      ) subq
+      GROUP BY ${dimensionExpressions.join(', ')}
+    ) grouped_data
+  `;
+
+    if (path.length === 1) {
+      group_sql = wrap_data(group_sql);
+    }
+  }
+
   if (path.length > 1 && relationship_key !== null) {
+    // console.log("RELATIONSHIP MAIN");
     let relationship = query_request.collection_relationships[relationship_key];
     let parent_alias = path.slice(0, -1).join("_");
     let relationship_alias = config.config.collection_aliases[relationship.target_collection];
     from_sql = `${relationship_alias} as ${escape_double(collection_alias)}`;
+    const condition = Object.entries(relationship.column_mapping).map(([from, to]) => {
+      return `${escape_double(parent_alias)}.${escape_double(from)} = ${escape_double(collection_alias)}.${escape_double(to)}`;
+    })
     where_conditions.push(
-      ...Object.entries(relationship.column_mapping).map(([from, to]) => {
-        return `${escape_double(parent_alias)}.${escape_double(from)} = ${escape_double(collection_alias)}.${escape_double(to)}`;
-      })
+      ...condition
+    );
+    agg_where_conditions.push(
+      ...condition
     );
   }
 
@@ -450,6 +618,7 @@ function build_query(
 
   if (query.predicate) {
     where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, args, variables, collection_alias, config.config.collection_aliases, config, query_request)})`);
+    agg_where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, agg_args, variables, collection_alias, config.config.collection_aliases, config, query_request)})`);
   }
 
   if (query.order_by && config.config) {
@@ -522,102 +691,8 @@ ${offset_sql}
 
   if (query.aggregates) {
     run_agg = true;
-    let agg_columns: string[] = [];
-    let agg_where_conditions = ["WHERE 1"];
-  
-    if (path.length > 1 && relationship_key !== null) {
-      let relationship = query_request.collection_relationships[relationship_key];
-      let parent_alias = path.slice(0, -1).join("_");
-      agg_where_conditions.push(
-        ...Object.entries(relationship.column_mapping).map(([from, to]) => {
-          return `${escape_double(parent_alias)}.${escape_double(from)} = ${escape_double(collection_alias)}.${escape_double(to)}`;
-        })
-      );
-    }
-  
-    if (query.predicate) {
-      agg_where_conditions.push(
-        `(${build_where(
-          query.predicate,
-          query_request.collection_relationships,
-          agg_args,
-          variables,
-          collection_alias,
-          config.config?.collection_aliases || {},
-          config,
-          query_request
-        )})`
-      );
-    }
-  
-    for (const [agg_name, agg_value] of Object.entries(query.aggregates)) {
-      if (agg_value.type === "star_count") {
-        agg_columns.push(`COUNT(*) as ${escape_double(agg_name)}`);
-      } else if (agg_value.type === "column_count") {
-        const column = `subq.${escape_double(agg_value.column)}`;
-        const column_expr = agg_value.distinct
-          ? `COUNT(DISTINCT ${column})`
-          : `COUNT(${column})`;
-        agg_columns.push(`${column_expr} as ${escape_double(agg_name)}`);
-      } else if (agg_value.type === "single_column") {
-        const column = `subq.${escape_double(agg_value.column)}`;
-        switch (agg_value.function) {
-          case "_sum":
-            agg_columns.push(`SUM(${column}) as ${escape_double(agg_name)}`);
-            break;
-          case "_avg":
-            agg_columns.push(`AVG(${column}) as ${escape_double(agg_name)}`);
-            break;
-          case "_max":
-            agg_columns.push(`MAX(${column}) as ${escape_double(agg_name)}`);
-            break;
-          case "_min":
-            agg_columns.push(`MIN(${column}) as ${escape_double(agg_name)}`);
-            break;
-          case "_stddev":
-            case "_stddev_samp":
-              const stdevSampleFormula = `SQRT(
-                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
-                / (COUNT(*) * (COUNT(*) - 1))
-              )`;
-              agg_columns.push(`${stdevSampleFormula} as ${escape_double(agg_name)}`);
-              break;
-            case "_stddev_pop":
-              const stdevPopFormula = `SQRT(
-                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
-                / (COUNT(*) * COUNT(*))
-              )`;
-              agg_columns.push(`${stdevPopFormula} as ${escape_double(agg_name)}`);
-              break;
-            case "_variance":
-            case "_var_samp":
-              const varianceSampleFormula = `(
-                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
-                / (COUNT(*) * (COUNT(*) - 1))
-              )`;
-              agg_columns.push(`${varianceSampleFormula} as ${escape_double(agg_name)}`);
-              break;
-            case "_var_pop":
-              const variancePopFormula = `(
-                (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
-                / (COUNT(*) * COUNT(*))
-              )`;
-              agg_columns.push(`${variancePopFormula} as ${escape_double(agg_name)}`);
-              break;
-          case "_group_concat":
-            agg_columns.push(`GROUP_CONCAT(${column}) as ${escape_double(agg_name)}`);
-            break;
-          case "_group_concat_distinct":
-            agg_columns.push(`GROUP_CONCAT(DISTINCT ${column}) as ${escape_double(agg_name)}`);
-            break;
-          case "_group_concat_include_nulls":
-            agg_columns.push(`GROUP_CONCAT(COALESCE(${column}, 'NULL')) as ${escape_double(agg_name)}`);
-            break;
-          default:
-            throw new Forbidden(`Unsupported aggregate function: ${agg_value.function}`, {});
-        }
-      }
-    }
+
+    const agg_columns = buildAggregateColumns(query.aggregates, "subq");
   
     agg_sql = wrap_data(`
       SELECT JSON_OBJECT(
@@ -641,8 +716,18 @@ ${offset_sql}
 
   if (path.length === 1) {
     sql = wrap_data(sql);
-    // console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
-    // console.log(format(formatSQLWithArgs(agg_sql, agg_args), { language: "sqlite" }));
+    // if (run_sql){
+    //   console.log("QUERY");
+    //   console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
+    // }
+    // if (run_agg){
+    //   console.log("AGGREGATE");
+    //   console.log(format(formatSQLWithArgs(agg_sql, agg_args), { language: "sqlite" }));
+    // }
+    // if (run_group){
+    //   console.log("GROUP");
+    //   console.log(format(formatSQLWithArgs(group_sql, group_args), { language: "sqlite" }));
+    // }
   }
 
   return {
@@ -665,55 +750,28 @@ export async function plan_queries(
   if (configuration.config === null || configuration.config === undefined) {
     throw new Forbidden("Connector is not properly configured", {});
   }
-  let collection_alias: string =
-    configuration.config.collection_aliases[query.collection];
-  let query_plan: SQLQuery[];
-  if (query.variables) {
-    let promises = query.variables.map((varSet) => {
-      let query_variables: QueryVariables = varSet;
-      if (configuration.config){
-      return build_query(
-        configuration,
-        query,
-        collection_alias,
-        query.query,
-        [],
-        query_variables,
-        [],
-        [],
-        [],
-        null,
-        query.collection_relationships,
-        configuration.config.collection_aliases
-      );
-      } else {
-        throw new Forbidden("Config must be defined", {});
-      }
-    });
-    query_plan = await Promise.all(promises);
-  } else {
-    let promise = build_query(
-      configuration,
-      query,
-      collection_alias,
-      query.query,
-      [],
-      {},
-      [],
-      [],
-      [],
-      null,
-      query.collection_relationships,
-      configuration.config.collection_aliases
-    );
-    query_plan = [promise];
-  }
-  return query_plan;
+  let collection_alias: string = configuration.config.collection_aliases[query.collection];
+
+  const buildQueryWithVariables = (variables: QueryVariables) => build_query(
+    configuration,
+    query,
+    collection_alias,
+    query.query,
+    [],
+    variables,
+    [],
+    [],
+    [],
+    null,
+    query.collection_relationships,
+    configuration.config!.collection_aliases
+  );
+  return query.variables ? await Promise.all(query.variables.map(buildQueryWithVariables)) : [buildQueryWithVariables({})];
 }
 
-async function do_all(con: any, query: SQLQuery): Promise<any[]> {
+async function do_all(con: any, sql: string, args: any[]): Promise<any[]> {
   return new Promise((resolve, reject) => {
-    con.all(query.sql, ...query.args, function (err: any, res: any) {
+    con.all(sql, ...args, function (err: any, res: any) {
       if (err) {
         reject(err);
       } else {
@@ -734,38 +792,24 @@ async function perform_query(
       let row_set: RowSet = {};  // Start with empty object 
       
       if (query_plan.runSql) {
-        const res = await do_all(connection, {
-          runSql: true,
-          runAgg: false,
-          runGroup: false,
-          sql: query_plan.sql,
-          args: query_plan.args,
-          aggSql: "",
-          aggArgs: [],
-          groupSql: "",
-          groupArgs: []
-        });
+        const res = await do_all(connection, query_plan.sql, query_plan.args);
         const regular_results = JSON.parse(res[0]["data"]);
         row_set.rows = regular_results.rows;
       }
 
       if (query_plan.runAgg) {
-        const aggRes = await do_all(connection, {
-          runSql: true,
-          runAgg: false,
-          runGroup: false,
-          sql: query_plan.aggSql,
-          args: query_plan.aggArgs,
-          aggSql: "",
-          aggArgs: [],
-          groupSql: "",
-          groupArgs: []
-        });
-        const parsedAggData = JSON.parse(aggRes[0]["data"]);
+        const res = await do_all(connection, query_plan.aggSql, query_plan.aggArgs);
+        const parsedAggData = JSON.parse(res[0]["data"]);
         row_set.aggregates = parsedAggData;
       }
 
-      if (!query_plan.runSql && !query_plan.runAgg){
+      if (query_plan.runGroup) {
+        const res = await do_all(connection, query_plan.groupSql, query_plan.groupArgs);
+        const parsedGroupData = JSON.parse(res[0]["data"]);
+        row_set.groups = parsedGroupData;
+      }
+
+      if (!query_plan.runSql && !query_plan.runAgg && !query_plan.runGroup){
         throw new Forbidden("Must run something 😭", {});
       }
 
@@ -787,5 +831,6 @@ export async function do_query(
 ): Promise<QueryResponse> {
   // console.log(JSON.stringify(query, null, 4));
   let query_plans = await plan_queries(configuration, query);
+  // throw new Forbidden("OK", {});
   return await perform_query(state, query_plans);
 }

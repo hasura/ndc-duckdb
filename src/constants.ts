@@ -1,5 +1,5 @@
 import { Capabilities, ScalarType } from "@hasura/ndc-sdk-typescript";
-import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
+// import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
 
 export const CAPABILITIES_RESPONSE: Capabilities = {
     query: {
