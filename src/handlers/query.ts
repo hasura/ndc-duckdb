@@ -14,7 +14,7 @@ import {
 import { Configuration, State } from "..";
 const SqlString = require("sqlstring-sqlite");
 import { MAX_32_INT } from "../constants";
-// import { format } from "sql-formatter";
+import { format } from "sql-formatter";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
@@ -526,7 +526,7 @@ function build_query(
           case "UBigInt":
           case "HugeInt":
           case "UHugeInt":
-            return `CAST(subq.${escape_double(dim.column_name)} AS TEXT)`;
+            return `subq.${escape_double(dim.column_name)}`;
           default:
             return `subq.${escape_double(dim.column_name)}`;
         }
@@ -552,9 +552,10 @@ function build_query(
       return processType(field_def.type);
     });
 
-    if (query.groups.order_by){
-      throw new Forbidden("Grouping order by not supported yet", {});
-    }
+
+    // console.log("GROUPS");
+    // console.log(query.groups);
+
 
     if (query.groups.predicate){
       throw new Forbidden("Grouping with predicate not supported yet", {});
@@ -564,33 +565,76 @@ function build_query(
 
     const agg_columns = buildAggregateColumns(aggregates, "subq");
 
+    const selectExpressions = dimensions.map((dim, i) => {
+      const object_type = config.config?.object_types[query_request.collection];
+      const field_def = object_type?.fields[dim.column_name];
+      const integerType = getIntegerType(field_def);
+      const isString = isStringType(field_def); // Check if the field is a string type
+    
+      if (integerType) {
+        return [
+          `${dimensionExpressions[i]} as ${escape_double(`_sort_${dim.column_name}`)}`,
+          `CAST(${dimensionExpressions[i]} AS TEXT) as ${escape_double(dim.column_name)}`
+        ];
+      } else if (isString) {
+        return [
+          `${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`
+        ];
+      } else {
+        return [`${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`];
+      }
+    }).flat();
+
+    let orderByClause = '';
+    if (query.groups.order_by && query.groups.order_by.elements.length > 0) {
+      const orderElements = query.groups.order_by.elements.map(elem => {
+        if (elem.target.type === 'dimension') {
+          const dimension = dimensions[elem.target.index];
+          const object_type = config.config?.object_types[query_request.collection];
+          const field_def = object_type?.fields[dimension.column_name];
+          const integerType = getIntegerType(field_def);
+          const isString = isStringType(field_def); // Check if the field is a string type
+    
+          const columnName = integerType ? `_sort_${dimension.column_name}` : dimension.column_name;
+    
+          const columnExpression = isString 
+            ? `LOWER(${escape_double(columnName)})`
+            : `${escape_double(columnName)}`;
+    
+          return `${columnExpression} ${elem.order_direction}`;
+        }
+        throw new Forbidden(`Unsupported order by target type: ${elem.target.type}`, {});
+      });
+      orderByClause = `ORDER BY ${orderElements.join(', ')}`;
+    }
+
     group_sql = `
-    SELECT COALESCE(
-      JSON_GROUP_ARRAY(
-        JSON_OBJECT(
-          'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
-          'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
-            `${escape_single(name)}, ${escape_double(name)}`
-          ).join(', ')})
-        )
-      ),
-      JSON('[]')
-    ) as data
+    SELECT 
+      COALESCE(
+        to_json(
+          list(
+            JSON_OBJECT(
+              'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
+              'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
+                `${escape_single(name)}, ${escape_double(name)}`
+              ).join(', ')})
+            )
+            ${orderByClause}
+          )
+        ),
+        JSON('[]')
+      ) as data
     FROM (
       SELECT
-        ${dimensionExpressions.map((expr, i) => `${expr} as ${escape_double(dimensionNames[i])}`).join(', ')},
+        ${selectExpressions.join(',\n        ')},
         ${agg_columns.join(', ')}
       FROM (
         SELECT * 
         FROM ${collection} as ${escape_double(collection_alias)}
-        ${""}
-        ${""}
-        ${query.groups.limit ? query.groups.limit : ""}
-        ${query.groups.offset ? query.groups.offset : ""}
       ) subq
       GROUP BY ${dimensionExpressions.join(', ')}
     ) grouped_data
-  `;
+    `;
 
     if (path.length === 1) {
       group_sql = wrap_data(group_sql);
