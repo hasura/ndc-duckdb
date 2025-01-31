@@ -360,6 +360,122 @@ function build_where(
   return sql;
 }
 
+function buildGroupQuery(
+  query: Query,
+  query_request: QueryRequest,
+  config: Configuration,
+  collection: string,
+  collection_alias: string,
+  path: string[]
+): string {
+  if (!query.groups){
+    throw new Forbidden("This shouldn't happen, the types lied!", {});
+  }
+  const { dimensions, aggregates } = query.groups!;
+
+  // Build dimension expressions
+  const dimensionExpressions = dimensions.map(dim => {
+    if (dim.type !== "column") {
+      throw new Forbidden("Only column dimensions are supported", {});
+    }
+    
+    const object_type = config.config?.object_types[query_request.collection];
+    const field_def = object_type?.fields[dim.column_name];
+    
+    if (!field_def) {
+      return `subq.${escape_double(dim.column_name)}`;
+    }
+    return `subq.${escape_double(dim.column_name)}`;
+  });
+
+  if (query.groups?.predicate) {
+    throw new Forbidden("Grouping with predicate not supported yet", {});
+  }
+
+  const dimensionNames = dimensions.map(d => d.column_name);
+  const agg_columns = buildAggregateColumns(aggregates, "subq");
+
+  // Build select expressions
+  const selectExpressions = dimensions.map((dim, i) => {
+    const object_type = config.config?.object_types[query_request.collection];
+    const field_def = object_type?.fields[dim.column_name];
+    const integerType = getIntegerType(field_def);
+    const isString = isStringType(field_def);
+  
+    if (integerType) {
+      return [
+        `${dimensionExpressions[i]} as ${escape_double(`_sort_${dim.column_name}`)}`,
+        `CAST(${dimensionExpressions[i]} AS TEXT) as ${escape_double(dim.column_name)}`
+      ];
+    } else if (isString) {
+      return [
+        `${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`
+      ];
+    } else {
+      return [`${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`];
+    }
+  }).flat();
+
+  // Build order by clause
+  let orderByClause = '';
+  if (query.groups.order_by && query.groups.order_by.elements.length > 0) {
+    const orderElements = query.groups.order_by.elements.map(elem => {
+      if (elem.target.type === 'dimension') {
+        const dimension = dimensions[elem.target.index];
+        const object_type = config.config?.object_types[query_request.collection];
+        const field_def = object_type?.fields[dimension.column_name];
+        const integerType = getIntegerType(field_def);
+        const isString = isStringType(field_def);
+  
+        const columnName = integerType ? `_sort_${dimension.column_name}` : dimension.column_name;
+  
+        const columnExpression = isString 
+          ? `LOWER(${escape_double(columnName)})`
+          : `${escape_double(columnName)}`;
+  
+        return `${columnExpression} ${elem.order_direction}`;
+      }
+      throw new Forbidden(`Unsupported order by target type: ${elem.target.type}`, {});
+    });
+    orderByClause = `ORDER BY ${orderElements.join(', ')}`;
+  }
+
+  // Build final SQL
+  let group_sql = `
+    SELECT 
+      COALESCE(
+        to_json(
+          list(
+            JSON_OBJECT(
+              'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
+              'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
+                `${escape_single(name)}, ${escape_double(name)}`
+              ).join(', ')})
+            )
+            ${orderByClause}
+          )
+        ),
+        JSON('[]')
+      ) as data
+    FROM (
+      SELECT
+        ${selectExpressions.join(',\n        ')},
+        ${agg_columns.join(', ')}
+      FROM (
+        SELECT * 
+        FROM ${collection} as ${escape_double(collection_alias)}
+      ) subq
+      GROUP BY ${dimensionExpressions.join(', ')}
+    ) grouped_data
+  `;
+
+  if (path.length === 1) {
+    group_sql = wrap_data(group_sql);
+  }
+
+  return group_sql;
+}
+
 function build_query(
   config: Configuration,
   query_request: QueryRequest,
@@ -396,6 +512,7 @@ function build_query(
   let collect_rows = [];
   let where_conditions = ["WHERE 1"];
   let agg_where_conditions = ["WHERE 1"];
+
   if (query.fields) {
     run_sql = true;
     for (let [field_name, field_value] of Object.entries(query.fields)) {
@@ -463,112 +580,6 @@ function build_query(
         default:
           throw new Conflict("The types tricked me. 😭", {});
       }
-    }
-  }
-
-  if (query.groups) {
-    run_group = true;
-    const { dimensions, aggregates } = query.groups;
-
-    const dimensionExpressions = dimensions.map(dim => {
-      if (dim.type !== "column") {
-        throw new Forbidden("Only column dimensions are supported", {});
-      }
-      
-      const object_type = config.config?.object_types[query_request.collection];
-      const field_def = object_type?.fields[dim.column_name];
-      
-      if (!field_def) {
-        return `subq.${escape_double(dim.column_name)}`;
-      }
-
-      return `subq.${escape_double(dim.column_name)}`;
-    });
-
-    console.log("GROUPS");
-    console.log(query.groups);
-
-    if (query.groups.predicate){
-      throw new Forbidden("Grouping with predicate not supported yet", {});
-    }
-
-    const dimensionNames = dimensions.map(d => d.column_name);
-
-    const agg_columns = buildAggregateColumns(aggregates, "subq");
-
-    const selectExpressions = dimensions.map((dim, i) => {
-      const object_type = config.config?.object_types[query_request.collection];
-      const field_def = object_type?.fields[dim.column_name];
-      const integerType = getIntegerType(field_def);
-      const isString = isStringType(field_def); // Check if the field is a string type
-    
-      if (integerType) {
-        return [
-          `${dimensionExpressions[i]} as ${escape_double(`_sort_${dim.column_name}`)}`,
-          `CAST(${dimensionExpressions[i]} AS TEXT) as ${escape_double(dim.column_name)}`
-        ];
-      } else if (isString) {
-        return [
-          `${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`
-        ];
-      } else {
-        return [`${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`];
-      }
-    }).flat();
-
-    let orderByClause = '';
-    if (query.groups.order_by && query.groups.order_by.elements.length > 0) {
-      const orderElements = query.groups.order_by.elements.map(elem => {
-        if (elem.target.type === 'dimension') {
-          const dimension = dimensions[elem.target.index];
-          const object_type = config.config?.object_types[query_request.collection];
-          const field_def = object_type?.fields[dimension.column_name];
-          const integerType = getIntegerType(field_def);
-          const isString = isStringType(field_def); // Check if the field is a string type
-    
-          const columnName = integerType ? `_sort_${dimension.column_name}` : dimension.column_name;
-    
-          const columnExpression = isString 
-            ? `LOWER(${escape_double(columnName)})`
-            : `${escape_double(columnName)}`;
-    
-          return `${columnExpression} ${elem.order_direction}`;
-        }
-        throw new Forbidden(`Unsupported order by target type: ${elem.target.type}`, {});
-      });
-      orderByClause = `ORDER BY ${orderElements.join(', ')}`;
-    }
-
-    group_sql = `
-    SELECT 
-      COALESCE(
-        to_json(
-          list(
-            JSON_OBJECT(
-              'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
-              'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
-                `${escape_single(name)}, ${escape_double(name)}`
-              ).join(', ')})
-            )
-            ${orderByClause}
-          )
-        ),
-        JSON('[]')
-      ) as data
-    FROM (
-      SELECT
-        ${selectExpressions.join(',\n        ')},
-        ${agg_columns.join(', ')}
-      FROM (
-        SELECT * 
-        FROM ${collection} as ${escape_double(collection_alias)}
-      ) subq
-      GROUP BY ${dimensionExpressions.join(', ')}
-    ) grouped_data
-    `;
-
-    if (path.length === 1) {
-      group_sql = wrap_data(group_sql);
     }
   }
 
@@ -687,6 +698,11 @@ ${offset_sql}
         ${offset_sql}
       ) subq
     `);
+  }
+
+  if (query.groups) {
+    run_group = true;
+    group_sql = buildGroupQuery(query, query_request, config, collection, collection_alias, path);
   }
 
   if (path.length === 1) {
