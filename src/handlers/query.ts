@@ -19,97 +19,62 @@ import { format } from "sql-formatter";
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
 
+/**
+ * Recursively traverse a Type to find the underlying named type name.
+ * Returns null if we don't end up with a named type (should be rare).
+ */
+function getBaseTypeName(t: Type): string | null {
+  if (t.type === 'named') {
+    return t.name;
+  }
+  if (t.type === 'nullable') {
+    return getBaseTypeName(t.underlying_type);
+  }
+  if (t.type === 'array') {
+    return getBaseTypeName(t.element_type);
+  }
+  return null;
+}
+
 function getColumnExpression(field_def: ObjectField, collection_alias: string, column: string): string {
-  // Helper function to handle the actual type
-  function handleNamedType(type: Type): string {
-    if (type.type != "named"){
-      throw new Forbidden("Named type must be named type", {});
-    }
-    switch (type.name){
-      case "BigInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      case "UBigInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      case "HugeInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      case "UHugeInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      default:
-        return `${escape_double(collection_alias)}.${escape_double(column)}`;
-    }
+  // Get the final named type (if any)
+  const typeName = getBaseTypeName(field_def.type);
+
+  // For BigInt variants, we convert to TEXT, else just use the raw column
+  switch (typeName) {
+    case "BigInt":
+    case "UBigInt":
+    case "HugeInt":
+    case "UHugeInt":
+      return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+    default:
+      // If it's not one of those special types (or no named type), return as is
+      return `${escape_double(collection_alias)}.${escape_double(column)}`;
   }
-  // Helper function to traverse the type structure
-  function processType(type: Type): string {
-    if (type.type === "nullable") {
-      if (type.underlying_type.type === "named") {
-        return handleNamedType(type.underlying_type);
-      } else if (type.underlying_type.type === "array") {
-        // Handle array type
-        return processType(type.underlying_type);
-      } else {
-        return processType(type.underlying_type);
-      }
-    } else if (type.type === "array") {
-      // Handle array type
-      return processType(type.element_type);
-    } else if (type.type === "named") {
-      return handleNamedType(type);
-    }
-    // Default case
-    return `${escape_double(collection_alias)}.${escape_double(column)}`;
-  }
-  return processType(field_def.type);
 }
 
 function isStringType(field_def: ObjectField | undefined): boolean {
   if (!field_def) return false;
-  
-  function checkType(type: any): boolean {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    if (type.type === "array") {
-      return false;
-    }
-    return type.type === "named" && type.name === "String";
-  }
-  
-  return checkType(field_def.type);
+  return getBaseTypeName(field_def.type) === "String";
 }
 
 function isTimestampType(field_def: ObjectField | undefined): boolean {
   if (!field_def) return false;
-  
-  function checkType(type: any): boolean {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    return type.type === "named" && (type.name === "Timestamp" || type.name === "TimestampTz");
-  }
-  
-  return checkType(field_def.type);
+  const base = getBaseTypeName(field_def.type);
+  return base === "Timestamp" || base === "TimestampTz";
 }
+
 function getIntegerType(field_def: ObjectField | undefined): string | null {
   if (!field_def) return null;
-  
-  function checkType(type: any): string | null {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    if (type.type === "named") {
-      switch (type.name) {
-        case "BigInt": return "BIGINT";
-        case "UBigInt": return "UBIGINT";
-        case "HugeInt": return "HUGEINT";
-        case "UHugeInt": return "UHUGEINT";
-        default: return null;
-      }
-    }
-    return null;
+  switch (getBaseTypeName(field_def.type)) {
+    case "BigInt":   return "BIGINT";
+    case "UBigInt":  return "UBIGINT";
+    case "HugeInt":  return "HUGEINT";
+    case "UHugeInt": return "UHUGEINT";
+    default:         return null;
   }
-  
-  return checkType(field_def.type);
 }
+
 function getRhsExpression(type: string | null): string {
   if (!type) return "?";
   return `CAST(? AS ${type})`;
@@ -517,45 +482,11 @@ function build_query(
         return `subq.${escape_double(dim.column_name)}`;
       }
 
-      function handleNamedType(type: Type): string {
-        if (type.type != "named") {
-          throw new Forbidden("Named type must be named type", {});
-        }
-        switch (type.name) {
-          case "BigInt":
-          case "UBigInt":
-          case "HugeInt":
-          case "UHugeInt":
-            return `subq.${escape_double(dim.column_name)}`;
-          default:
-            return `subq.${escape_double(dim.column_name)}`;
-        }
-      }
-
-      function processType(type: Type): string {
-        if (type.type === "nullable") {
-          if (type.underlying_type.type === "named") {
-            return handleNamedType(type.underlying_type);
-          } else if (type.underlying_type.type === "array") {
-            return processType(type.underlying_type);
-          } else {
-            return processType(type.underlying_type);
-          }
-        } else if (type.type === "array") {
-          return processType(type.element_type);
-        } else if (type.type === "named") {
-          return handleNamedType(type);
-        }
-        return `subq.${escape_double(dim.column_name)}`;
-      }
-
-      return processType(field_def.type);
+      return `subq.${escape_double(dim.column_name)}`;
     });
 
-
-    // console.log("GROUPS");
-    // console.log(query.groups);
-
+    console.log("GROUPS");
+    console.log(query.groups);
 
     if (query.groups.predicate){
       throw new Forbidden("Grouping with predicate not supported yet", {});
@@ -760,18 +691,18 @@ ${offset_sql}
 
   if (path.length === 1) {
     sql = wrap_data(sql);
-    // if (run_sql){
-    //   console.log("QUERY");
-    //   console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
-    // }
-    // if (run_agg){
-    //   console.log("AGGREGATE");
-    //   console.log(format(formatSQLWithArgs(agg_sql, agg_args), { language: "sqlite" }));
-    // }
-    // if (run_group){
-    //   console.log("GROUP");
-    //   console.log(format(formatSQLWithArgs(group_sql, group_args), { language: "sqlite" }));
-    // }
+    if (run_sql){
+      console.log("QUERY");
+      console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
+    }
+    if (run_agg){
+      console.log("AGGREGATE");
+      console.log(format(formatSQLWithArgs(agg_sql, agg_args), { language: "sqlite" }));
+    }
+    if (run_group){
+      console.log("GROUP");
+      console.log(format(formatSQLWithArgs(group_sql, group_args), { language: "sqlite" }));
+    }
   }
 
   return {
@@ -873,8 +804,7 @@ export async function do_query(
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
-  // console.log(JSON.stringify(query, null, 4));
+  console.log(JSON.stringify(query, null, 4));
   let query_plans = await plan_queries(configuration, query);
-  // throw new Forbidden("OK", {});
   return await perform_query(state, query_plans);
 }
